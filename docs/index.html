@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dual-Boot Launcher — Web Flasher</title>
+  <style>
+    :root { --bg:#0e1122; --card:#171b30; --ink:#eef0f8; --muted:#8492b4; --accent:#2fe38a; --line:#263056; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink);
+      font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+      display:flex; min-height:100vh; align-items:center; justify-content:center; padding:24px; }
+    .card { width:100%; max-width:560px; background:var(--card); border:1px solid var(--line);
+      border-radius:16px; padding:28px 30px; }
+    .logo { display:flex; align-items:center; gap:12px; margin-bottom:6px; }
+    .logo .mark { width:22px; height:22px; background:var(--accent); border-radius:5px; position:relative; }
+    .logo .mark::after { content:""; position:absolute; inset:6px; background:var(--card); border-radius:2px; }
+    h1 { font-size:20px; margin:0; letter-spacing:1px; }
+    .sub { color:var(--muted); font-size:13px; margin:4px 0 20px; }
+    ol { line-height:1.7; font-size:14px; padding-left:20px; margin:0; }
+    b { color:var(--accent); }
+    .btnwrap { margin:22px 0 6px; }
+    button.install { background:var(--accent); color:#0e1122; border:0; border-radius:10px;
+      font:600 16px/1 ui-monospace, monospace; padding:14px 26px; cursor:pointer; letter-spacing:.5px; }
+    .note { color:var(--muted); font-size:12px; margin-top:16px; line-height:1.6; }
+    .note a { color:var(--accent); }
+    .rule { height:2px; background:var(--accent); border-radius:2px; margin:18px 0; opacity:.8; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo"><div class="mark"></div><h1>DUAL-BOOT LAUNCHER</h1></div>
+    <div class="sub">Flash the launcher onto a LilyGo T-Embed CC1101 — browser only, no tools.
+      Bruce / Flipper aren't included; you add any firmware later from the SD card.</div>
+    <div class="rule"></div>
+    <ol>
+      <li>Plug the T-Embed CC1101 into this computer with a USB-C cable (use <b>Chrome</b> or <b>Edge</b> on desktop).</li>
+      <li>Click <b>Install</b> and pick the serial port that appears.</li>
+      <li>Let it erase &amp; flash. When it finishes, power-cycle and it boots into the launcher.</li>
+    </ol>
+    <div class="btnwrap">
+      <esp-web-install-button manifest="./manifest.json">
+        <button class="install" slot="activate">⚡ Install launcher</button>
+        <span slot="unsupported">Your browser can't flash — please use Chrome or Edge on desktop.</span>
+        <span slot="not-allowed">This page must be opened over https:// (or localhost).</span>
+      </esp-web-install-button>
+    </div>
+    <div class="note">
+      <b>Fresh device?</b> The steps above are all you need.<br>
+      <b>Already running this launcher?</b> Its USB mode blocks auto-reset, so first put it in
+      download mode on the device: <b>Settings → Power → Flash (web) → press</b>, then click Install.
+      A power-cycle cancels download mode.<br>
+      Prefer a manual flash? Download <a href="./launcher.bin">launcher.bin</a> and write it at
+      offset <b>0x0</b> with esptool.
+    </div>
+  </div>
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+</body>
+</html>

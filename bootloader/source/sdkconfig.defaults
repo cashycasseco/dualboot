@@ -1,0 +1,25 @@
+# --- Target and flash layout: must match the Launcher's own build ---
+CONFIG_IDF_TARGET="esp32s3"
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+
+# --- The whole point of this project ---
+# Hold GPIO6 (the T-Embed's BACK button, active low) at power-on and the
+# bootloader starts the TEST partition instead of the selected OTA app.
+# The Launcher lives in that TEST partition (app0, subtype 'test'), so this
+# is what makes it reachable again after a firmware has been installed.
+CONFIG_BOOTLOADER_APP_TEST=y
+CONFIG_BOOTLOADER_NUM_PIN_APP_TEST=6
+CONFIG_BOOTLOADER_APP_TEST_PIN_LOW=y
+# Default is 5 seconds, which feels broken to a user. 1 second is enough to
+# rule out an accidental press while still being quick.
+CONFIG_BOOTLOADER_HOLD_TIME_GPIO=1
+
+# Keep the rollback machinery as the stock Launcher framework has it, so the
+# bootloader treats existing otadata exactly the same way as before.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# Launcher rewrites the partition table at 0x8000 on every install; the stock
+# setting would abort() on that write.
+CONFIG_SPI_FLASH_DANGEROUS_WRITE_ALLOWED=y
