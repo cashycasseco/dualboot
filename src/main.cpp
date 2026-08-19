@@ -17,6 +17,7 @@
 #include "serial_console.h"
 #include "settings.h"
 #include "usbdrive.h"
+#include "webportal.h"
 #include <SD.h>
 #include <ctype.h>
 
@@ -213,6 +214,7 @@ static void mainMenu() {
         const int nSlots = (int)slots.size();
         tiles.push_back({"Install", IC_INSTALL, 0});
         tiles.push_back({"USB", IC_USB, 0});
+        tiles.push_back({"WiFi", IC_WIFI, 0});
         tiles.push_back({"Settings", IC_SETTINGS, 0});
 
         int sel = uiGrid(LAUNCHER_NAME, tiles, serialConsolePoll);
@@ -229,6 +231,8 @@ static void mainMenu() {
             installFromSdMenu();
         } else if (sel == nSlots + 1) {
             usbDriveEnter();
+        } else if (sel == nSlots + 2) {
+            webPortalEnter();
         } else {
             settingsGrid();
         }

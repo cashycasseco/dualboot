@@ -469,18 +469,23 @@ static const CatAnim &catOf(int id) {
 int uiCatFrames(int id) { return catOf(id).frames; }
 int uiCatDelayMs(int id) { return catOf(id).delayMs; }
 
+// Palette-indexed blit: index 0 is transparent, so no separate mask is needed. Runs of the same
+// index are drawn with one fillRect, which is a lot cheaper than per-pixel writes.
 void uiCatDraw(int id, int frame, int cx, int cy) {
     const CatAnim &a = catOf(id);
     frame %= a.frames;
-    const int stride = (a.w + 7) / 8;
-    const uint16_t *rgb = a.rgb + (uint32_t)frame * a.w * a.h;
-    const uint8_t *mask = a.mask + (uint32_t)frame * stride * a.h;
+    const uint8_t *idx = a.idx + (uint32_t)frame * a.w * a.h;
     const int x0 = cx - a.w / 2, y0 = cy - a.h / 2;
     for (int y = 0; y < a.h; ++y) {
-        const uint8_t *mrow = mask + y * stride;
-        for (int x = 0; x < a.w; ++x)
-            if (mrow[x >> 3] & (0x80 >> (x & 7)))
-                gfx->drawPixel(x0 + x, y0 + y, rgb[y * a.w + x]);
+        const uint8_t *row = idx + (uint32_t)y * a.w;
+        int x = 0;
+        while (x < a.w) {
+            const uint8_t v = row[x];
+            int run = 1;
+            while (x + run < a.w && row[x + run] == v) ++run;
+            if (v) gfx->fillRect(x0 + x, y0 + y, run, 1, a.pal[v]);
+            x += run;
+        }
     }
 }
 

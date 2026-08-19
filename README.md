@@ -19,6 +19,8 @@ Nothing but the launcher ships on the device — you add the rest.
   done. Three app slots.
 - **USB drive mode.** Expose the SD card as a USB mass-storage drive to copy files from your PC
   without removing it.
+- **Wi-Fi upload portal.** The launcher can host its own hotspot and serve a small upload page —
+  drop firmware `.bin` files and theme packs on from a phone, no cable and no card reader.
 - **Web-flashable.** Install the launcher onto a fresh device from the browser — no toolchain.
 - **Themeable.** Full-spectrum accent-colour picker, WS2812 LED colour + brightness (0 % = off),
   coordinated presets, and **complete custom theme packs** — colours, your own icons and your own
@@ -64,6 +66,7 @@ the chip first for a clean install.
 - **Slot 1–3** — an installed app (press to boot it) or `Empty` (press to install into it).
 - **Install** — pick a `.bin` from the SD card, choose a slot, name it.
 - **USB** — expose the SD card as a USB drive.
+- **WiFi** — start the upload hotspot (see below).
 - **Settings** — design, delete apps, PIN, about, power.
 
 **Booting an app:** selecting an installed slot sets it as the boot target and restarts. The
@@ -83,6 +86,21 @@ Only the app image is written into the slot, so a standard single-file `.bin` (b
 
 **USB** on the main menu presents the SD card to your PC as a removable drive. Copy firmware,
 themes, or boot frames, then press back — the launcher re-reads the card.
+
+### Wi-Fi upload portal
+
+**WiFi** on the main menu turns the launcher into an access point and serves a small upload page —
+handy when the device is nowhere near your PC.
+
+1. Pick **WiFi**; the screen shows the network name (`T-Embed-XXXX`), the password (`dualboot`) and
+   the address to open (`http://192.168.4.1`).
+2. Join it from a phone or laptop and open that address.
+3. Upload a **firmware `.bin`** (saved to the card — install it with **Install**) or a **theme pack
+   `.zip`** straight from the theme creator (unpacked into `/themes` on the device).
+4. **BACK** shuts the hotspot down. It won't quit mid-upload.
+
+Theme zips are unpacked on-device. They must be *stored* (uncompressed) zips — which is exactly
+what the theme creator produces. Entries with `..` or absolute paths are rejected.
 
 ### Themes & colours (Settings → Design)
 
@@ -195,8 +213,8 @@ A prebuilt `firmware/launcher.bin` is committed so you don't have to.
 ### Layout
 
 ```
-src/            launcher source (display, input, apps, settings, USB, PIN, boot animation …)
-                + generated data headers (font, icons, cat, boot animation)
+src/            launcher source (display, input, apps, settings, USB, Wi-Fi portal, PIN,
+                boot animation …) + generated data headers (font, icons, cat, boot animation)
 lib/            vendored Arduino_GFX (PSRAM-canvas patched) and RotaryEncoder
 boards/         the lilygo-t-embed-cc1101 board variant
 bootloader/     custom 2nd-stage bootloader (prebuilt .bin + source)

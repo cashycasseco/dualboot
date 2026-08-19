@@ -16,10 +16,11 @@ int  scrW();                 // 320 in landscape
 int  scrH();                 // 170 in landscape
 
 // Carousel-pill icons (Material Design Icons, tinted at draw time — theme-safe).
+// Order matters: theme packs (icons.bin) address icons by index, so only APPEND here.
 enum Icon {
     IC_NONE = 0, IC_APP, IC_EMPTY, IC_INSTALL, IC_USB, IC_SETTINGS, IC_DESIGN,
     IC_DELETE, IC_BACK, IC_PIN, IC_ABOUT, IC_OFF, IC_LEDBRIGHT, IC_LEDCOLOR,
-    IC_ANIM, IC_COLOR, IC_THEME, IC_FLASH, IC_FILE, IC_CHECK,
+    IC_ANIM, IC_COLOR, IC_THEME, IC_FLASH, IC_FILE, IC_CHECK, IC_WIFI,
 };
 
 struct Tile {

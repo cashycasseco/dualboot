@@ -146,13 +146,15 @@
       <button id="build">⬇ Download theme pack (.zip)</button>
       <span class="files" id="buildInfo"></span>
     </div>
+    <p class="hint" style="margin-bottom:8px"><b style="color:var(--accent)">Easiest — over Wi-Fi:</b>
+      on the device pick <b>WiFi</b> in the main menu, join the hotspot it shows, open
+      <code>http://192.168.4.1</code> and upload this .zip. It's unpacked on the device for you.</p>
     <ol class="steps">
-      <li>Unzip it into a <code>/themes</code> folder on the SD card, so you get
+      <li>Or by card: unzip it into a <code>/themes</code> folder on the SD card, so you get
         <code>/themes/&lt;your-theme&gt;/</code>.</li>
-      <li>No card reader? On the device pick <b>USB</b> in the main menu — the SD card shows up as a
-        drive on your PC.</li>
-      <li>On the device: <b>Settings → Design → Theme</b> → pick your theme. Colours, icons and the
-        boot animation all switch over instantly.</li>
+      <li>Or over USB: pick <b>USB</b> in the main menu — the SD card shows up as a drive on your PC.</li>
+      <li>Then on the device: <b>Settings → Design → Theme</b> → pick your theme. Colours, icons and
+        the boot animation all switch over instantly.</li>
     </ol>
     <div id="pfilewarn" style="margin-top:16px;padding:13px 15px;border:1px solid #ffb020;
          border-radius:10px;background:#1d1a12">
@@ -178,10 +180,10 @@
 const ICON_W = 48, ICON_H = 48, ICON_STRIDE = 6, ICON_BYTES = ICON_STRIDE * ICON_H;
 // Must match enum Icon in src/display.h (index 0 = "no icon" and is not editable).
 const ICON_NAMES = ["NONE","APP","EMPTY","INSTALL","USB","SETTINGS","DESIGN","DELETE","BACK","PIN",
-  "ABOUT","OFF","LEDBRIGHT","LEDCOLOR","ANIM","COLOR","THEME","FLASH","FILE","CHECK"];
+  "ABOUT","OFF","LEDBRIGHT","LEDCOLOR","ANIM","COLOR","THEME","FLASH","FILE","CHECK","WIFI"];
 const ICON_LABELS = ["","App slot","Empty slot","Install (SD)","USB drive","Settings","Design",
   "Delete","Back","PIN","About","Power","Brightness","LED colour","Animation","Colour","Theme",
-  "Flash","File","Selected"];
+  "Flash","File","Selected","Wi-Fi upload"];
 const ICON_COUNT = ICON_NAMES.length;
 
 let defaultMasks = [];            // Uint8Array(ICON_BYTES) per icon, from icons_default.bin
@@ -568,9 +570,12 @@ $("name").oninput = updateBuildInfo;
 (async () => {
   try {
     const buf = new Uint8Array(await (await fetch("icons_default.bin")).arrayBuffer());
-    const count = buf[5];
-    for (let i = 0; i < ICON_COUNT; i++)
-      defaultMasks.push(buf.slice(8 + i*ICON_BYTES, 8 + (i+1)*ICON_BYTES));
+    const count = buf[5];                       // trust the file, not our own constant
+    for (let i = 0; i < ICON_COUNT; i++) {
+      const m = new Uint8Array(ICON_BYTES);     // pad if the file is older/shorter than we expect
+      if (i < count) m.set(buf.subarray(8 + i*ICON_BYTES, 8 + (i+1)*ICON_BYTES));
+      defaultMasks.push(m);
+    }
   } catch (e) {                                 // offline / opened from disk: start blank
     for (let i = 0; i < ICON_COUNT; i++) defaultMasks.push(new Uint8Array(ICON_BYTES));
   }
