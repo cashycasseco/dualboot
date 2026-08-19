@@ -5,6 +5,7 @@
 #include "input.h"
 #include "led.h"
 #include "sdcard.h"
+#include "serial_console.h"
 #include <Preferences.h>
 #include <SD.h>
 #include <algorithm>
@@ -246,16 +247,22 @@ static uint32_t parseHex(String v) {
     return strtoul(v.c_str(), nullptr, 16);
 }
 
-// Parse one /themes/*.txt file (key = value, '#' comments). Needs at least an accent colour.
+// Parse one theme file (key = value, '#' comments). Needs at least an accent colour.
 static bool parseThemeFile(const String &path, ThemeDef &t) {
     File f = SD.open(path);
     if (!f) return false;
     t.name = "";
     t.bri = -1;
-    bool haveAccent = false, haveLed = false;
+    bool haveAccent = false, haveLed = false, first = true;
     uint32_t accent = 0, led = 0;
     while (f.available()) {
         String line = f.readStringUntil('\n');
+        if (first) { // editors (Notepad) like to prefix a UTF-8 BOM
+            first = false;
+            if (line.length() >= 3 && (uint8_t)line[0] == 0xEF && (uint8_t)line[1] == 0xBB &&
+                (uint8_t)line[2] == 0xBF)
+                line = line.substring(3);
+        }
         line.trim();
         if (line.length() == 0 || line[0] == '#') continue;
         int eq = line.indexOf('=');
@@ -301,57 +308,206 @@ static void ensureThemesExample() {
     f.close();
 }
 
+// The basename of a path, since some SD cores return "/themes/x.txt" from name().
+static String baseName(String n) {
+    int sl = n.lastIndexOf('/');
+    return sl >= 0 ? n.substring(sl + 1) : n;
+}
+
+// Windows Information Protection encrypts files copied to removable drives, renaming them to
+// "<name>.PFILE" and dropping an "$EFS" marker beside them. The contents are genuinely
+// encrypted, so nothing on the device can read them — we detect it to explain the failure.
+static bool sSawEncrypted = false;
+static bool looksEncrypted(const String &name) {
+    String low = name;
+    low.toLowerCase();
+    return low.endsWith(".pfile") || low == "$efs";
+}
+static bool isThemeText(const String &name) {
+    String low = name;
+    low.toLowerCase();
+    return low.endsWith(".txt") || low.endsWith(".thm");
+}
+
+// List a directory's entries, separated into files and subfolders (names only).
+static void listDir(const String &path, std::vector<String> &files, std::vector<String> &dirs) {
+    File dir = SD.open(path);
+    if (!dir || !dir.isDirectory()) {
+        if (dir) dir.close();
+        return;
+    }
+    for (File f = dir.openNextFile(); f; f = dir.openNextFile()) {
+        const String n = baseName(f.name());
+        if (n.length() == 0 || n[0] == '.') continue; // skip . / .. / dot-files
+        if (looksEncrypted(n)) sSawEncrypted = true;
+        if (f.isDirectory()) dirs.push_back(n);
+        else files.push_back(n);
+    }
+    dir.close();
+    std::sort(files.begin(), files.end());
+    std::sort(dirs.begin(), dirs.end());
+}
+
+// Load a theme PACK from a folder: theme.txt (or any *.txt in it) plus optional icons.bin and
+// boot/ frames. Unzipping on Windows often adds one extra folder level, so if the folder holds
+// no theme text we look one level deeper before giving up.
+static bool loadPack(const String &base, const String &folderName, ThemeDef &t, int depth = 0) {
+    std::vector<String> files, dirs;
+    listDir(base, files, dirs);
+    String txt;
+    for (const String &f : files)                      // prefer theme.txt
+        if (baseName(f).equalsIgnoreCase("theme.txt")) { txt = f; break; }
+    if (txt.length() == 0)
+        for (const String &f : files)
+            if (isThemeText(f)) { txt = f; break; }
+    if (txt.length()) {
+        if (!parseThemeFile(base + "/" + txt, t)) return false;
+        if (t.name.length() == 0) t.name = folderName;
+        t.dir = base;
+        return true;
+    }
+    if (depth < 1)                                     // e.g. /themes/pack-theme/pack/theme.txt
+        for (const String &d : dirs)
+            if (loadPack(base + "/" + d, d, t, depth + 1)) return true;
+    return false;
+}
+
 // Built-ins first, then the SD card's /themes: both plain "<name>.txt" files and full theme
 // PACKS, i.e. a "<name>/" folder holding theme.txt plus optional icons.bin and boot/ frames.
-static std::vector<ThemeDef> themesAll() {
+static std::vector<ThemeDef> themesAll(String *report = nullptr) {
     std::vector<ThemeDef> v;
     for (int i = 0; i < BUILTIN_N; ++i)
         v.push_back({BUILTIN[i].name, PAL[BUILTIN[i].accent].rgb565, PAL[BUILTIN[i].led].r,
                      PAL[BUILTIN[i].led].g, PAL[BUILTIN[i].led].b, -1, ""});
-    if (sdInit()) {
-        File dir = SD.open("/themes");
-        if (dir && dir.isDirectory()) {
-            std::vector<String> files, packs;
-            for (File f = dir.openNextFile(); f; f = dir.openNextFile()) {
-                String n = f.name();
-                int sl = n.lastIndexOf('/');
-                if (sl >= 0) n = n.substring(sl + 1);
-                if (f.isDirectory()) {
-                    packs.push_back(n);
-                    continue;
-                }
-                String low = n;
-                low.toLowerCase();
-                if (low.endsWith(".txt") || low.endsWith(".thm")) files.push_back(n);
-            }
-            dir.close();
-            std::sort(files.begin(), files.end());
-            std::sort(packs.begin(), packs.end());
-            for (const String &n : files) {
-                ThemeDef t;
-                if (parseThemeFile("/themes/" + n, t)) {
-                    if (t.name.length() == 0) t.name = n.substring(0, n.lastIndexOf('.'));
-                    t.dir = "";
-                    v.push_back(t);
-                }
-            }
-            for (const String &n : packs) { // folder packs
-                ThemeDef t;
-                const String base = "/themes/" + n;
-                if (parseThemeFile(base + "/theme.txt", t)) {
-                    if (t.name.length() == 0) t.name = n;
-                    t.dir = base;
-                    v.push_back(t);
-                }
-            }
-        }
+    sSawEncrypted = false;
+    if (!sdInit()) {
+        if (report) *report = "SD not mounted";
+        return v;
+    }
+    if (!SD.exists("/themes")) {
+        if (report) *report = "no /themes folder on the card";
+        return v;
+    }
+    std::vector<String> files, dirs;
+    listDir("/themes", files, dirs);
+    int okFiles = 0, badFiles = 0, okPacks = 0, badPacks = 0;
+    for (const String &n : files) {
+        if (!isThemeText(n)) continue;
+        ThemeDef t;
+        if (parseThemeFile("/themes/" + n, t)) {
+            if (t.name.length() == 0) t.name = n.substring(0, n.lastIndexOf('.'));
+            t.dir = "";
+            v.push_back(t);
+            okFiles++;
+        } else badFiles++;
+    }
+    for (const String &d : dirs) {
+        ThemeDef t;
+        if (loadPack("/themes/" + d, d, t)) { v.push_back(t); okPacks++; }
+        else badPacks++;
+    }
+    if (report) {
+        char b[160];
+        snprintf(b, sizeof(b), "%d file(s) ok / %d bad, %d pack(s) ok / %d bad%s", okFiles, badFiles,
+                 okPacks, badPacks, sSawEncrypted ? " [Windows-encrypted .PFILE found]" : "");
+        *report = String(b);
     }
     return v;
 }
 
+bool themesSawEncryptedFiles() { return sSawEncrypted; }
+
+// Raw listing of /themes, two levels deep, so a failing pack can be diagnosed.
+static String themesTree() {
+    String out = "/themes tree:\n";
+    if (!sdInit()) return out + "  (SD not mounted)\n";
+    if (!SD.exists("/themes")) return out + "  (folder does not exist)\n";
+    // First bytes of a theme file, so we can tell "renamed" from "encrypted".
+    auto peek = [](const String &path) {
+        File f = SD.open(path);
+        if (!f) return String("  <cannot open>");
+        String s = "  first bytes: ";
+        for (int i = 0; i < 24 && f.available(); ++i) {
+            char c = (char)f.read();
+            s += (c >= 32 && c < 127) ? String(c) : String(".");
+        }
+        f.close();
+        return s;
+    };
+    std::vector<String> files, dirs;
+    listDir("/themes", files, dirs);
+    for (const String &f : files) out += "  F /themes/" + f + "\n";
+    for (const String &d : dirs) {
+        out += "  D /themes/" + d + "/\n";
+        std::vector<String> f2, d2;
+        listDir("/themes/" + d, f2, d2);
+        for (const String &f : f2) {
+            out += "      F " + f + "\n";
+            String low = f;
+            low.toLowerCase();
+            if (low.startsWith("theme.txt")) out += peek("/themes/" + d + "/" + f) + "\n";
+        }
+        for (const String &s : d2) {
+            out += "      D " + s + "/\n";
+            std::vector<String> f3, d3;
+            listDir("/themes/" + d + "/" + s, f3, d3);
+            for (const String &f : f3) out += "          F " + f + "\n";
+            for (const String &t : d3) out += "          D " + t + "/\n";
+        }
+    }
+    return out;
+}
+
+// Used by the serial console's "themes" command to explain what the scanner found.
+String themesScanReport() {
+    String rep;
+    std::vector<ThemeDef> all = themesAll(&rep);
+    String out = themesTree();
+    out += "themes: " + rep + "\n";
+    for (const ThemeDef &t : all) {
+        char line[160];
+        snprintf(line, sizeof(line), "  %-18s accent=%04X led=%02X%02X%02X bri=%d %s\n",
+                 t.name.c_str(), t.accent, t.r, t.g, t.b, t.bri,
+                 t.dir.length() ? t.dir.c_str() : "(built-in)");
+        out += line;
+    }
+    return out;
+}
+
 static void themesMenu() {
+    // Re-mount first: the card may have been written over USB drive mode or swapped since the
+    // last scan, and a stale FAT cache would hide freshly added themes.
+    sdRemount();
     ensureThemesExample();
-    std::vector<ThemeDef> themes = themesAll();
+    String rep;
+    std::vector<ThemeDef> themes = themesAll(&rep);
+    if ((int)themes.size() <= BUILTIN_N) { // nothing from the card — say why instead of staying mute
+        uiBackground();
+        uiTitleBar("THEME");
+        if (themesSawEncryptedFiles()) {
+            // The files are there but Windows encrypted them on copy (.PFILE + $EFS).
+            uiTextCenter("Windows ENCRYPTED your theme", 42, 1, COL_WARN);
+            uiTextCenter("The card holds .PFILE files, which", 62, 1, COL_MUTED);
+            uiTextCenter("nothing can read. Copy the theme", 74, 1, COL_MUTED);
+            uiTextCenter("again with Windows data protection", 86, 1, COL_MUTED);
+            uiTextCenter("turned off, then delete the .PFILEs.", 98, 1, COL_MUTED);
+        } else {
+            uiTextCenter("No themes found on the SD card", 44, 1, COL_FG);
+            uiTextCenter(rep, 62, 1, COL_MUTED);
+            uiTextCenter("put them in  /themes  on the card", 84, 1, COL_MUTED);
+            uiTextCenter("make one at", 100, 1, COL_MUTED);
+            uiTextCenter("loznoc.github.io/dualboot/theme.html", 112, 1, gAccent);
+        }
+        uiTextCenter("press = built-in themes    back = exit", scrH() - 12, 1, gAccent);
+        uiFlush();
+        inputDrain();
+        for (;;) {
+            InputEvent e = inputPoll();
+            if (e == EV_BACK) return;
+            if (e == EV_PRESS) break; // fall through to the built-in list
+            delay(30);
+        }
+    }
     std::vector<Tile> tiles;
     for (const ThemeDef &t : themes) {
         bool active = sAccent == t.accent && sLedOn && sLedR == t.r && sLedG == t.g &&
@@ -359,7 +515,7 @@ static void themesMenu() {
         tiles.push_back({t.name, active ? IC_CHECK : IC_NONE, 0, t.accent});
     }
     tiles.push_back({"Back", IC_BACK, 0, 0});
-    int sel = uiCarousel(tiles, "THEME", true);
+    int sel = uiCarousel(tiles, "THEME", true, serialConsolePoll);
     if (sel < 0 || sel >= (int)themes.size()) return;
     const ThemeDef &t = themes[sel];
     sAccent = t.accent;
@@ -438,7 +594,7 @@ void appearanceMenu() {
             {"Theme", IC_THEME, 0},      {"Color", IC_COLOR, 0}, {"LED Color", IC_LEDCOLOR, 0},
             {"Bright", IC_LEDBRIGHT, 0}, {"Boot", IC_ANIM, 0},   {"Back", IC_BACK, 0},
         };
-        int sel = uiGrid("DESIGN", tiles);
+        int sel = uiGrid("DESIGN", tiles, serialConsolePoll);
         if (sel < 0 || sel == 5) return;
         switch (sel) {
             case 0: themesMenu(); break;

@@ -16,3 +16,10 @@ bool bootAnimEnabled();
 
 // The active theme pack's boot-frame folder, or "" if it has none (then /boot is used).
 String themeBootDir();
+
+// Human-readable dump of what the /themes scanner finds (serial console "themes" command).
+String themesScanReport();
+
+// True when the last scan saw Windows-encrypted ".PFILE"/"$EFS" entries in /themes — the files
+// are present but unreadable, which otherwise looks like "no themes found".
+bool themesSawEncryptedFiles();

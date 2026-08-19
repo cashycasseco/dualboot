@@ -2,6 +2,7 @@
 #include "apps.h"
 #include "battery.h"
 #include "sdcard.h"
+#include "settings.h"
 #include "usbdrive.h" // USBSerial
 #include <SD.h>
 #include <esp_ota_ops.h>
@@ -125,6 +126,15 @@ static void handleLine(String cmd) {
         usb_persist_restart(RESTART_BOOTLOADER); // one-shot: recovers on the next flash+reset
     } else if (cmd == "bat") {
         USBSerial.println(batteryDebug());
+    } else if (cmd == "themes") {
+        // The CDC TX timeout is 0 (so a stalled host can never block the UI), which means a long
+        // burst would be silently dropped. Feed it in small chunks and let the FIFO drain.
+        const String r = themesScanReport();
+        for (int i = 0; i < (int)r.length(); i += 64) {
+            USBSerial.print(r.substring(i, min((int)r.length(), i + 64)));
+            USBSerial.flush();
+            delay(15);
+        }
     } else if (cmd == "usbon") {
         usbDrivePresent(true);
         USBSerial.println("usb: media present");
@@ -132,7 +142,7 @@ static void handleLine(String cmd) {
         usbDrivePresent(false);
         USBSerial.println("usb: media absent");
     } else if (cmd == "help") {
-        USBSerial.println("commands: flash <slot> <size> | name <1-3> <text> | info | sd | usbon | usboff | help");
+        USBSerial.println("commands: flash <slot> <size> | name <1-3> <text> | info | sd | themes | bat | usbon | usboff | download | help");
     } else if (cmd == "info") {
         auto apps = appsList();
         if (apps.empty()) USBSerial.println("no apps installed");

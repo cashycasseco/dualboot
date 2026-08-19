@@ -154,6 +154,19 @@
       <li>On the device: <b>Settings → Design → Theme</b> → pick your theme. Colours, icons and the
         boot animation all switch over instantly.</li>
     </ol>
+    <div id="pfilewarn" style="margin-top:16px;padding:13px 15px;border:1px solid #ffb020;
+         border-radius:10px;background:#1d1a12">
+      <b style="color:#ffb020">⚠ Windows users — if the theme doesn't show up on the device</b>
+      <p class="hint" style="margin-top:6px">
+        Windows can silently <b>encrypt</b> files copied to removable drives, renaming them to
+        <code>theme.txt.PFILE</code>, <code>icons.bin.PFILE</code> … and adding an <code>$EFS</code>
+        file. The launcher can't read those — the theme looks missing. If you see
+        <code>.PFILE</code> names on the card, delete them and copy the pack again with that data
+        protection turned off (it comes from a Windows Information Protection / "personal data
+        encryption" policy). Extracting the ZIP <i>directly</i> onto the card, rather than copying
+        already-extracted files, usually avoids it too.
+      </p>
+    </div>
   </div>
 </div>
 
