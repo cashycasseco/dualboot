@@ -3,6 +3,7 @@
 #include "display.h"
 #include "input.h"
 #include "sdcard.h"
+#include "webpage_data.h" // kWebPageGz â€” see tools/make_webpage.py
 #include <SD.h>
 #include <WebServer.h>
 #include <WiFi.h>
@@ -196,65 +197,6 @@ static void finishTheme() {
                                    "Pick it on the device: Settings -> Design -> Theme.");
 }
 
-// ---- the page ---------------------------------------------------------------------------------
-static const char PAGE[] PROGMEM = R"HTML(<!doctype html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>T-Embed Launcher</title>
-<style>
-:root{--bg:#0e1122;--card:#171b30;--ink:#eef0f8;--mut:#8492b4;--acc:#2fe38a;--line:#263056}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);
-font-family:ui-monospace,Consolas,monospace;padding:20px 14px 50px}
-.w{max-width:520px;margin:0 auto}h1{font-size:18px;letter-spacing:1px;margin:0 0 4px}
-.s{color:var(--mut);font-size:12px;margin-bottom:18px;line-height:1.6}
-.c{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px}
-h2{font-size:13px;color:var(--acc);margin:0 0 8px;letter-spacing:.5px}
-p{color:var(--mut);font-size:12px;line-height:1.6;margin:0 0 10px}
-input[type=file]{width:100%;font:inherit;font-size:12px;color:var(--mut);
-background:#0e1122;border:1px solid var(--line);border-radius:8px;padding:9px}
-button{margin-top:10px;background:var(--acc);color:#0e1122;border:0;border-radius:8px;
-font:600 13px/1 ui-monospace,monospace;padding:11px 18px;cursor:pointer;width:100%}
-button:disabled{opacity:.5}
-.bar{height:8px;background:#0e1122;border-radius:4px;overflow:hidden;margin-top:10px;display:none}
-.bar i{display:block;height:100%;background:var(--acc);width:0;transition:width .2s}
-.msg{font-size:12px;margin-top:9px;white-space:pre-wrap;line-height:1.5}
-.ok{color:var(--acc)}.err{color:#ff6b6b}
-</style></head><body><div class="w">
-<h1>T-EMBED LAUNCHER</h1>
-<div class="s">Connected over the launcher's own Wi-Fi. Files land on the SD card.</div>
-
-<div class="c"><h2>FIRMWARE (.bin)</h2>
-<p>Upload an ESP32-S3 firmware image. It's saved to the card; install it on the device with
-<b>Install</b>.</p>
-<input type="file" id="bf" accept=".bin">
-<button id="bb">Upload firmware</button>
-<div class="bar" id="bp"><i></i></div><div class="msg" id="bm"></div></div>
-
-<div class="c"><h2>THEME PACK (.zip)</h2>
-<p>Upload the .zip straight from the theme creator. It's unpacked into <b>/themes</b>; pick it
-under <b>Settings &gt; Design &gt; Theme</b>.</p>
-<input type="file" id="tf" accept=".zip">
-<button id="tb">Upload theme</button>
-<div class="bar" id="tp"><i></i></div><div class="msg" id="tm"></div></div>
-</div><script>
-function up(fi,btn,bar,msg,url,accept){
- var f=document.getElementById(fi).files[0];
- if(!f){msg.textContent="Choose a file first.";msg.className="msg err";return;}
- if(accept&&!f.name.toLowerCase().endsWith(accept)){
-   msg.textContent="That is not a "+accept+" file.";msg.className="msg err";return;}
- var fd=new FormData();fd.append("f",f);
- var x=new XMLHttpRequest();x.open("POST",url);
- bar.style.display="block";btn.disabled=true;msg.textContent="";msg.className="msg";
- x.upload.onprogress=function(e){if(e.lengthComputable)
-   bar.firstChild.style.width=(e.loaded/e.total*100)+"%";};
- x.onload=function(){btn.disabled=false;
-   msg.textContent=x.responseText;msg.className="msg "+(x.status==200?"ok":"err");};
- x.onerror=function(){btn.disabled=false;msg.textContent="Upload failed.";msg.className="msg err";};
- x.send(fd);
-}
-document.getElementById("bb").onclick=function(){
- up("bf",this,document.getElementById("bp"),document.getElementById("bm"),"/bin",".bin");};
-document.getElementById("tb").onclick=function(){
- up("tf",this,document.getElementById("tp"),document.getElementById("tm"),"/theme",".zip");};
-</script></body></html>)HTML";
 
 // ---- screen ------------------------------------------------------------------------------------
 static void drawPortal() {
@@ -323,7 +265,10 @@ void webPortalEnter() {
         return;
     }
 
-    server.on("/", HTTP_GET, []() { server.send_P(200, "text/html", PAGE); });
+    server.on("/", HTTP_GET, []() { // stored gzipped; every browser unpacks it for us
+        server.sendHeader("Content-Encoding", "gzip");
+        server.send_P(200, "text/html", (const char *)kWebPageGz, sizeof(kWebPageGz));
+    });
     server.on("/bin", HTTP_POST, finishBin, handleUploadData);
     server.on("/theme", HTTP_POST, finishTheme, handleUploadData);
     server.onNotFound([]() { server.sendHeader("Location", "/"); server.send(302, "text/plain", ""); });

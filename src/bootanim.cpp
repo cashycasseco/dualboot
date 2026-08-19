@@ -23,6 +23,19 @@ static void scaleAndDraw(const uint16_t *src, int w, int h, uint16_t *out, int S
     uiFlush();
 }
 
+// Same, for a palette-indexed frame: the palette lookup happens during the scale, so the
+// full-colour frame never has to exist in memory.
+static void scaleAndDrawIndexed(const uint8_t *idx, const uint16_t *pal, int w, int h,
+                                uint16_t *out, int SW, int SH) {
+    for (int y = 0; y < SH; ++y) {
+        const uint8_t *srow = idx + (size_t)(y * h / SH) * w;
+        uint16_t *orow = out + (size_t)y * SW;
+        for (int x = 0; x < SW; ++x) orow[x] = pal[srow[x * w / SW]];
+    }
+    gfx->draw16bitRGBBitmap(0, 0, out, SW, SH);
+    uiFlush();
+}
+
 // Custom animation from the SD card: a folder of *.raw frames, each = uint16 w, uint16 h
 // (little-endian), then w*h RGB565 pixels. Frames play in file-name order. The active theme
 // pack's own boot/ folder wins; otherwise the generic /boot folder is used.
@@ -84,10 +97,11 @@ static bool playSdBootAnimation(uint16_t *out, int SW, int SH) {
     return drew;
 }
 
-// The animation compiled into the firmware, scaled fullscreen.
+// The animation compiled into the firmware: one shared palette, and each frame stored as
+// Deflate-compressed palette indices. Only W*H bytes are inflated at a time.
 static void playEmbeddedBootAnimation(uint16_t *out, int SW, int SH) {
-    uint16_t *frame = (uint16_t *)ps_malloc(kBootAnimRawFrameSize);
-    if (!frame) frame = (uint16_t *)malloc(kBootAnimRawFrameSize);
+    uint8_t *frame = (uint8_t *)ps_malloc(kBootAnimRawFrameSize);
+    if (!frame) frame = (uint8_t *)malloc(kBootAnimRawFrameSize);
     if (!frame) return;
     gfx->fillScreen(COL_BG);
     for (uint16_t f = 0; f < kBootAnimFrames; ++f) {
@@ -96,7 +110,7 @@ static void playEmbeddedBootAnimation(uint16_t *out, int SW, int SH) {
         const size_t sl = kBootAnimOffsets[f + 1] - kBootAnimOffsets[f];
         if (tinfl_decompress_mem_to_mem(frame, kBootAnimRawFrameSize, s, sl, 1) != kBootAnimRawFrameSize)
             continue;
-        scaleAndDraw(frame, kBootAnimWidth, kBootAnimHeight, out, SW, SH);
+        scaleAndDrawIndexed(frame, kBootAnimPalette, kBootAnimWidth, kBootAnimHeight, out, SW, SH);
         delay(50);
     }
     free(frame);
@@ -105,25 +119,10 @@ static void playEmbeddedBootAnimation(uint16_t *out, int SW, int SH) {
 
 void playBootAnimation() {
     const int SW = scrW(), SH = scrH();
+    // The scale buffer is a full screen of RGB565. It lives in PSRAM, which this board always
+    // has — the display canvas itself needs it too — so if this fails, skip the animation.
     uint16_t *out = (uint16_t *)ps_malloc((size_t)SW * SH * sizeof(uint16_t));
-    if (!out) { // no PSRAM: draw the embedded frames centred, unscaled
-        uint16_t *frame = (uint16_t *)malloc(kBootAnimRawFrameSize);
-        if (!frame) return;
-        const int x0 = (SW - kBootAnimWidth) / 2, y0 = (SH - kBootAnimHeight) / 2;
-        gfx->fillScreen(COL_BG);
-        for (uint16_t f = 0; f < kBootAnimFrames && x0 >= 0 && y0 >= 0; ++f) {
-            if (inputPoll() != EV_NONE) break;
-            const uint8_t *s = kBootAnimData + kBootAnimOffsets[f];
-            const size_t sl = kBootAnimOffsets[f + 1] - kBootAnimOffsets[f];
-            if (tinfl_decompress_mem_to_mem(frame, kBootAnimRawFrameSize, s, sl, 1) == kBootAnimRawFrameSize)
-                gfx->draw16bitRGBBitmap(x0, y0, frame, kBootAnimWidth, kBootAnimHeight);
-            uiFlush();
-            delay(50);
-        }
-        free(frame);
-        inputDrain();
-        return;
-    }
+    if (!out) return;
 
     // A custom /boot animation on the SD wins; otherwise the built-in one plays.
     if (!playSdBootAnimation(out, SW, SH)) playEmbeddedBootAnimation(out, SW, SH);

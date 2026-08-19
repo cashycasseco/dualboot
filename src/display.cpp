@@ -463,18 +463,42 @@ String uiTextEntry(const String &title, const String &initial) {
 }
 
 // ---- Oreo cat + vertical progress -----------------------------------------
+// ESP32-S3 ROM Deflate decoder (miniz tinfl); flag 1 = parse the zlib header.
+extern "C" size_t
+tinfl_decompress_mem_to_mem(void *pOut, size_t out_len, const void *pSrc, size_t src_len, int flags);
+
 static const CatAnim &catOf(int id) {
     return (id == CAT_ID_ATTACK) ? CAT_ATTACK : CAT_SLEEP;
 }
 int uiCatFrames(int id) { return catOf(id).frames; }
 int uiCatDelayMs(int id) { return catOf(id).delayMs; }
 
+// The frames live in flash Deflate-compressed (~32x smaller). Inflate on first use and keep the
+// indices in PSRAM; both cats together are ~113 KB, which PSRAM has in abundance.
+static uint8_t *sCatCache[2] = {nullptr, nullptr};
+static const uint8_t *catIndices(int id) {
+    const int slot = (id == CAT_ID_ATTACK) ? 1 : 0;
+    if (sCatCache[slot]) return sCatCache[slot];
+    const CatAnim &a = catOf(id);
+    uint8_t *buf = (uint8_t *)ps_malloc(a.rawlen);
+    if (!buf) buf = (uint8_t *)malloc(a.rawlen);
+    if (!buf) return nullptr;
+    if (tinfl_decompress_mem_to_mem(buf, a.rawlen, a.z, a.zlen, 1) != a.rawlen) {
+        free(buf);
+        return nullptr;
+    }
+    sCatCache[slot] = buf;
+    return buf;
+}
+
 // Palette-indexed blit: index 0 is transparent, so no separate mask is needed. Runs of the same
 // index are drawn with one fillRect, which is a lot cheaper than per-pixel writes.
 void uiCatDraw(int id, int frame, int cx, int cy) {
     const CatAnim &a = catOf(id);
+    const uint8_t *base = catIndices(id);
+    if (!base) return;
     frame %= a.frames;
-    const uint8_t *idx = a.idx + (uint32_t)frame * a.w * a.h;
+    const uint8_t *idx = base + (uint32_t)frame * a.w * a.h;
     const int x0 = cx - a.w / 2, y0 = cy - a.h / 2;
     for (int y = 0; y < a.h; ++y) {
         const uint8_t *row = idx + (uint32_t)y * a.w;
