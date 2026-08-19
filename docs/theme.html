@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dual-Boot Launcher — Theme Creator</title>
+<style>
+  :root { --bg:#0e1122; --card:#171b30; --ink:#eef0f8; --muted:#8492b4; --accent:#2fe38a; --line:#263056; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font-family:ui-monospace,"Cascadia Mono",Consolas,monospace; padding:24px 16px 60px; }
+  .wrap { max-width:880px; margin:0 auto; }
+  .logo { display:flex; align-items:center; gap:12px; margin-bottom:6px; }
+  .logo .mark { width:22px; height:22px; background:var(--accent); border-radius:5px; position:relative; }
+  .logo .mark::after { content:""; position:absolute; inset:6px; background:var(--bg); border-radius:2px; }
+  h1 { font-size:20px; margin:0; letter-spacing:1px; }
+  h2 { font-size:14px; letter-spacing:1px; margin:0 0 4px; color:var(--accent); }
+  .sub { color:var(--muted); font-size:13px; margin:4px 0 22px; line-height:1.6; }
+  .sub a { color:var(--accent); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:20px 22px; margin-bottom:16px; }
+  .hint { color:var(--muted); font-size:12px; line-height:1.6; margin:6px 0 0; }
+  label { font-size:12px; color:var(--muted); display:block; margin-bottom:4px; }
+  input[type=text], select { background:#0e1122; color:var(--ink); border:1px solid var(--line);
+    border-radius:8px; padding:8px 10px; font:inherit; font-size:13px; width:100%; }
+  input[type=color] { width:100%; height:38px; background:#0e1122; border:1px solid var(--line);
+    border-radius:8px; padding:3px; cursor:pointer; }
+  input[type=range] { width:100%; accent-color:var(--accent); }
+  .row { display:flex; gap:14px; flex-wrap:wrap; }
+  .row > div { flex:1 1 150px; min-width:140px; }
+  button { background:var(--accent); color:#0e1122; border:0; border-radius:9px;
+    font:600 13px/1 ui-monospace,monospace; padding:11px 18px; cursor:pointer; letter-spacing:.4px; }
+  button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  .icons { display:grid; grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); gap:10px; margin-top:12px; }
+  .icon { background:#0e1122; border:1px solid var(--line); border-radius:10px; padding:8px 6px;
+    text-align:center; cursor:pointer; transition:border-color .15s; }
+  .icon:hover { border-color:var(--accent); }
+  .icon canvas { display:block; margin:0 auto 6px; border-radius:8px; }
+  .icon .nm { font-size:10px; color:var(--muted); letter-spacing:.3px; word-break:break-all; }
+  .icon.custom { border-color:var(--accent); }
+  .icon.custom .nm { color:var(--accent); }
+  .preview { display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap; }
+  .preview canvas { border-radius:8px; border:1px solid var(--line); image-rendering:pixelated; }
+  .strip { display:flex; gap:3px; margin-top:8px; }
+  .strip i { width:14px; height:14px; border-radius:3px; display:block; }
+  .files { font-size:12px; color:var(--muted); margin-top:8px; }
+  .bar { height:8px; background:#0e1122; border-radius:4px; overflow:hidden; margin-top:8px; }
+  .bar i { display:block; height:100%; background:var(--accent); width:0; }
+  .warn { color:#ffb020; }
+  .ok { color:var(--accent); }
+  .steps { font-size:13px; line-height:1.8; padding-left:18px; margin:6px 0 0; }
+  code { background:#0e1122; padding:1px 5px; border-radius:4px; font-size:12px; }
+  .dl { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo"><div class="mark"></div><h1>THEME CREATOR</h1></div>
+  <div class="sub">
+    Build a complete theme pack for the Dual-Boot Launcher — colours, your own icons and your own
+    boot animation (drop in a GIF, it's converted for you). Everything happens in your browser;
+    nothing is uploaded. <a href="./">← back to the flasher</a>
+  </div>
+
+  <div class="card">
+    <h2>1 · BASICS</h2>
+    <div class="row" style="margin-top:10px">
+      <div style="flex:2 1 220px">
+        <label>Theme name</label>
+        <input type="text" id="name" value="My Theme" maxlength="24" />
+      </div>
+      <div>
+        <label>Accent (screen)</label>
+        <input type="color" id="accent" value="#2fe38a" />
+      </div>
+      <div>
+        <label>LED colour</label>
+        <input type="color" id="led" value="#2fe38a" />
+      </div>
+    </div>
+    <div style="margin-top:14px">
+      <label>LED brightness — <span id="briVal">60%</span></label>
+      <input type="range" id="bri" min="0" max="100" step="5" value="60" />
+      <p class="hint">0% turns the LEDs off.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2 · PREVIEW</h2>
+    <div class="preview" style="margin-top:12px">
+      <canvas id="prev" width="640" height="340" style="width:320px;height:170px"></canvas>
+      <div>
+        <label>LED strip</label>
+        <div class="strip" id="strip"></div>
+        <p class="hint" style="max-width:260px">Approximate — the device uses its own bitmap
+          title font. Icons and colours are exact.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>3 · ICONS <span style="color:var(--muted);font-weight:400">(optional)</span></h2>
+    <p class="hint">Click an icon to replace it with your own image (PNG, SVG, JPG). It's scaled to
+      48×48 and reduced to a 1-bit mask — the launcher tints it to match the theme, so shape is all
+      that matters. Transparent PNGs work best. Click a replaced icon again to re-upload, or use
+      <b>invert</b> / <b>reset</b> below it.</p>
+    <div class="icons" id="icons"></div>
+    <div style="margin-top:14px" class="dl">
+      <button class="ghost" id="resetIcons">Reset all icons</button>
+      <span class="files" id="iconInfo">using built-in icons</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>4 · BOOT ANIMATION <span style="color:var(--muted);font-weight:400">(optional)</span></h2>
+    <p class="hint">Drop in an animated <b>GIF</b> (or WebP/APNG, or several still images) and it's
+      converted into the launcher's frame format automatically — cropped to the screen's shape,
+      resized and written as <code>.raw</code> frames.</p>
+    <div class="row" style="margin-top:12px">
+      <div>
+        <label>Frame size</label>
+        <select id="animSize">
+          <option value="160x85">160 × 85 — small (recommended)</option>
+          <option value="224x119">224 × 119 — medium</option>
+          <option value="320x170">320 × 170 — full screen</option>
+        </select>
+      </div>
+      <div>
+        <label>Max frames — <span id="maxFramesVal">24</span></label>
+        <input type="range" id="maxFrames" min="2" max="60" step="1" value="24" />
+      </div>
+    </div>
+    <div style="margin-top:14px" class="dl">
+      <button id="pickAnim">Choose GIF / images…</button>
+      <button class="ghost" id="clearAnim" disabled>Remove</button>
+      <span class="files" id="animInfo">no animation — the built-in one is kept</span>
+    </div>
+    <div class="bar"><i id="animBar"></i></div>
+    <div id="animPrev" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card">
+    <h2>5 · DOWNLOAD &amp; INSTALL</h2>
+    <div class="dl" style="margin-top:12px">
+      <button id="build">⬇ Download theme pack (.zip)</button>
+      <span class="files" id="buildInfo"></span>
+    </div>
+    <ol class="steps">
+      <li>Unzip it into a <code>/themes</code> folder on the SD card, so you get
+        <code>/themes/&lt;your-theme&gt;/</code>.</li>
+      <li>No card reader? On the device pick <b>USB</b> in the main menu — the SD card shows up as a
+        drive on your PC.</li>
+      <li>On the device: <b>Settings → Design → Theme</b> → pick your theme. Colours, icons and the
+        boot animation all switch over instantly.</li>
+    </ol>
+  </div>
+</div>
+
+<input type="file" id="iconFile" accept="image/*" hidden />
+<input type="file" id="animFile" accept="image/*" multiple hidden />
+
+<script>
+// ---------------------------------------------------------------- constants
+const ICON_W = 48, ICON_H = 48, ICON_STRIDE = 6, ICON_BYTES = ICON_STRIDE * ICON_H;
+// Must match enum Icon in src/display.h (index 0 = "no icon" and is not editable).
+const ICON_NAMES = ["NONE","APP","EMPTY","INSTALL","USB","SETTINGS","DESIGN","DELETE","BACK","PIN",
+  "ABOUT","OFF","LEDBRIGHT","LEDCOLOR","ANIM","COLOR","THEME","FLASH","FILE","CHECK"];
+const ICON_LABELS = ["","App slot","Empty slot","Install (SD)","USB drive","Settings","Design",
+  "Delete","Back","PIN","About","Power","Brightness","LED colour","Animation","Colour","Theme",
+  "Flash","File","Selected"];
+const ICON_COUNT = ICON_NAMES.length;
+
+let defaultMasks = [];            // Uint8Array(ICON_BYTES) per icon, from icons_default.bin
+let masks = [];                   // current (possibly customised)
+let customised = new Set();       // indices the user replaced
+let animFrames = [];              // Uint8Array raw frames ready for the SD card
+let animMeta = null;              // {w,h,count,bytes}
+
+const $ = id => document.getElementById(id);
+
+// ---------------------------------------------------------------- helpers
+const hex2rgb = h => [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+const lum = ([r,g,b]) => (r*54 + g*183 + b*19) >> 8;            // same weights as the firmware
+const contrastOf = rgb => lum(rgb) > 150 ? [0,0,0] : [255,255,255];
+const dim = ([r,g,b],p) => [r*p/100|0, g*p/100|0, b*p/100|0];
+const css = ([r,g,b]) => `rgb(${r},${g},${b})`;
+// RGB565 round-trip, so previews show exactly what the 16-bit display will render.
+function quant565([r,g,b]) { return [(r&0xF8)|(r>>5), (g&0xFC)|(g>>6), (b&0xF8)|(b>>5)]; }
+const bitAt = (m,x,y) => (m[y*ICON_STRIDE + (x>>3)] >> (7-(x&7))) & 1;
+
+function maskToCanvas(mask, size, fg, bg, radius) {
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const g = c.getContext("2d");
+  if (bg) { // rounded pill behind the icon, like the device draws
+    g.fillStyle = css(bg);
+    const r = radius === undefined ? size/4 : radius;
+    g.beginPath(); g.roundRect(0,0,size,size,r); g.fill();
+  }
+  g.fillStyle = css(fg);
+  const s = size / ICON_W;
+  for (let y = 0; y < ICON_H; y++)
+    for (let x = 0; x < ICON_W; x++)
+      if (bitAt(mask,x,y)) g.fillRect(Math.round(x*s), Math.round(y*s), Math.ceil(s), Math.ceil(s));
+  return c;
+}
+
+// ---------------------------------------------------------------- icon editing
+function loadImageFile(file) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); res(img); };
+    img.onerror = e => { URL.revokeObjectURL(url); rej(e); };
+    img.src = url;
+  });
+}
+
+// Turn any image into a 1-bit 48x48 mask. Transparent art uses its alpha; a flat opaque image
+// is thresholded on brightness and we keep whichever side is the minority (that's the drawing).
+function imageToMask(img, invert) {
+  const c = document.createElement("canvas");
+  c.width = ICON_W; c.height = ICON_H;
+  const g = c.getContext("2d", { willReadFrequently:true });
+  g.clearRect(0,0,ICON_W,ICON_H);
+  const iw = img.naturalWidth || img.width || ICON_W, ih = img.naturalHeight || img.height || ICON_H;
+  const s = Math.min(ICON_W/iw, ICON_H/ih), dw = iw*s, dh = ih*s;
+  g.drawImage(img, (ICON_W-dw)/2, (ICON_H-dh)/2, dw, dh);
+  const d = g.getImageData(0,0,ICON_W,ICON_H).data;
+
+  let transparent = false, lo = 255, hi = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i+3] < 250) transparent = true;
+    const L = lum([d[i],d[i+1],d[i+2]]);
+    if (L < lo) lo = L;
+    if (L > hi) hi = L;
+  }
+  const ink = new Uint8Array(ICON_W*ICON_H);
+  if (transparent) {
+    for (let p = 0; p < ink.length; p++) ink[p] = d[p*4+3] > 110 ? 1 : 0;
+  } else {
+    const mid = (lo + hi) / 2;
+    let dark = 0;
+    for (let p = 0; p < ink.length; p++) {
+      const L = lum([d[p*4],d[p*4+1],d[p*4+2]]);
+      ink[p] = L < mid ? 1 : 0;
+      if (ink[p]) dark++;
+    }
+    if (dark > ink.length/2) for (let p = 0; p < ink.length; p++) ink[p] ^= 1; // keep the minority
+  }
+  if (invert) for (let p = 0; p < ink.length; p++) ink[p] ^= 1;
+
+  const mask = new Uint8Array(ICON_BYTES);
+  for (let y = 0; y < ICON_H; y++)
+    for (let x = 0; x < ICON_W; x++)
+      if (ink[y*ICON_W+x]) mask[y*ICON_STRIDE + (x>>3)] |= 0x80 >> (x&7);
+  return mask;
+}
+
+function renderIcons() {
+  const accent = quant565(hex2rgb($("accent").value));
+  const fg = contrastOf(accent);
+  const box = $("icons");
+  box.innerHTML = "";
+  for (let i = 1; i < ICON_COUNT; i++) {
+    const d = document.createElement("div");
+    d.className = "icon" + (customised.has(i) ? " custom" : "");
+    d.title = "Click to replace " + ICON_LABELS[i];
+    d.appendChild(maskToCanvas(masks[i], 48, fg, accent));
+    const nm = document.createElement("div");
+    nm.className = "nm";
+    nm.textContent = ICON_LABELS[i];
+    d.appendChild(nm);
+    d.onclick = () => pickIcon(i);
+    if (customised.has(i)) {
+      const tools = document.createElement("div");
+      tools.style.cssText = "display:flex;gap:4px;justify-content:center;margin-top:5px";
+      const mk = (t, fn) => {
+        const b = document.createElement("button");
+        b.className = "ghost";
+        b.style.cssText = "padding:3px 6px;font-size:10px";
+        b.textContent = t;
+        b.onclick = e => { e.stopPropagation(); fn(); };
+        return b;
+      };
+      tools.appendChild(mk("inv", () => { invertIcon(i); }));
+      tools.appendChild(mk("×", () => { masks[i] = defaultMasks[i].slice(); customised.delete(i); refresh(); }));
+      d.appendChild(tools);
+    }
+    box.appendChild(d);
+  }
+  $("iconInfo").textContent = customised.size
+    ? `${customised.size} custom icon${customised.size>1?"s":""}`
+    : "using built-in icons";
+}
+
+function invertIcon(i) {
+  const m = masks[i];
+  for (let y = 0; y < ICON_H; y++)
+    for (let x = 0; x < ICON_W; x++) {
+      const byte = y*ICON_STRIDE + (x>>3), bit = 0x80 >> (x&7);
+      m[byte] ^= bit;
+    }
+  refresh();
+}
+
+let pendingIcon = -1;
+function pickIcon(i) { pendingIcon = i; $("iconFile").value = ""; $("iconFile").click(); }
+$("iconFile").onchange = async e => {
+  const f = e.target.files[0];
+  if (!f || pendingIcon < 0) return;
+  try {
+    const img = await loadImageFile(f);
+    masks[pendingIcon] = imageToMask(img, false);
+    customised.add(pendingIcon);
+    refresh();
+  } catch (err) { alert("Could not read that image."); }
+};
+$("resetIcons").onclick = () => {
+  masks = defaultMasks.map(m => m.slice());
+  customised.clear();
+  refresh();
+};
+
+// ---------------------------------------------------------------- boot animation
+async function decodeFrames(files) {
+  const out = [];
+  if (files.length > 1) {                       // several stills = the frames, in name order
+    const sorted = [...files].sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true}));
+    for (const f of sorted) out.push(await loadImageFile(f));
+    return out;
+  }
+  const file = files[0];
+  if ("ImageDecoder" in window) {               // animated GIF / WebP / APNG
+    try {
+      const dec = new ImageDecoder({ data: await file.arrayBuffer(), type: file.type || "image/gif" });
+      await dec.tracks.ready;
+      const n = dec.tracks.selectedTrack?.frameCount || 1;
+      for (let i = 0; i < n; i++) out.push((await dec.decode({ frameIndex:i })).image);
+      if (out.length) return out;
+    } catch (e) { /* fall through to a single still */ }
+  }
+  out.push(await loadImageFile(file));
+  return out;
+}
+
+// Cover-crop to the target aspect, scale, then emit the launcher's .raw frame
+// (uint16 w, uint16 h, then w*h little-endian RGB565 pixels).
+function frameToRaw(src, W, H) {
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const g = c.getContext("2d", { willReadFrequently:true });
+  g.fillStyle = "#000"; g.fillRect(0,0,W,H);
+  const sw = src.displayWidth || src.naturalWidth || src.width;
+  const sh = src.displayHeight || src.naturalHeight || src.height;
+  const scale = Math.max(W/sw, H/sh);
+  const dw = sw*scale, dh = sh*scale;
+  g.drawImage(src, (W-dw)/2, (H-dh)/2, dw, dh);
+  const d = g.getImageData(0,0,W,H).data;
+  const out = new Uint8Array(4 + W*H*2);
+  out[0] = W & 255; out[1] = W >> 8; out[2] = H & 255; out[3] = H >> 8;
+  let o = 4;
+  for (let i = 0; i < W*H; i++) {
+    const v = ((d[i*4] & 0xF8) << 8) | ((d[i*4+1] & 0xFC) << 3) | (d[i*4+2] >> 3);
+    out[o++] = v & 255; out[o++] = v >> 8;
+  }
+  return { raw: out, canvas: c };
+}
+
+$("pickAnim").onclick = () => { $("animFile").value = ""; $("animFile").click(); };
+$("clearAnim").onclick = () => {
+  animFrames = []; animMeta = null;
+  $("animPrev").innerHTML = ""; $("animBar").style.width = "0";
+  $("clearAnim").disabled = true;
+  $("animInfo").textContent = "no animation — the built-in one is kept";
+  updateBuildInfo();
+};
+$("animFile").onchange = async e => {
+  const files = [...e.target.files];
+  if (!files.length) return;
+  const [W,H] = $("animSize").value.split("x").map(Number);
+  const maxF = +$("maxFrames").value;
+  $("animInfo").textContent = "decoding…";
+  try {
+    let srcs = await decodeFrames(files);
+    if (!srcs.length) throw new Error("no frames");
+    // Evenly sample down to the frame budget so long GIFs keep their full motion.
+    if (srcs.length > maxF) {
+      const picked = [];
+      for (let i = 0; i < maxF; i++) picked.push(srcs[Math.round(i*(srcs.length-1)/(maxF-1))]);
+      srcs = picked;
+    }
+    animFrames = [];
+    const strip = document.createElement("div");
+    strip.style.cssText = "display:flex;gap:6px;flex-wrap:wrap";
+    for (let i = 0; i < srcs.length; i++) {
+      const { raw, canvas } = frameToRaw(srcs[i], W, H);
+      animFrames.push(raw);
+      if (i < 8) {
+        canvas.style.cssText = "width:88px;height:auto;border-radius:6px;border:1px solid var(--line);image-rendering:pixelated";
+        strip.appendChild(canvas);
+      }
+      $("animBar").style.width = ((i+1)/srcs.length*100) + "%";
+      if (i % 4 === 0) await new Promise(r => setTimeout(r)); // keep the page responsive
+    }
+    for (const s of srcs) if (s.close) s.close();            // release VideoFrames
+    const bytes = animFrames.reduce((a,f) => a + f.length, 0);
+    animMeta = { w:W, h:H, count:animFrames.length, bytes };
+    $("animPrev").innerHTML = "";
+    $("animPrev").appendChild(strip);
+    $("animInfo").innerHTML = `<span class="ok">${animFrames.length} frames · ${W}×${H} · ${(bytes/1048576).toFixed(2)} MB</span>`;
+    $("clearAnim").disabled = false;
+  } catch (err) {
+    $("animInfo").innerHTML = `<span class="warn">Could not read that file. For animated GIFs use Chrome or Edge, or upload the frames as separate images.</span>`;
+  }
+  updateBuildInfo();
+};
+
+// ---------------------------------------------------------------- live preview
+function drawPreview() {
+  const c = $("prev"), g = c.getContext("2d");
+  const S = 2, W = 320, H = 170, SB = 17;
+  const accent = quant565(hex2rgb($("accent").value));
+  const ledRGB = quant565(hex2rgb($("led").value));
+  const bri = +$("bri").value;
+  g.setTransform(S,0,0,S,0,0);
+  g.fillStyle = "#10141f"; g.fillRect(0,0,W,H);
+  g.fillStyle = "#1b2140";
+  for (let y = SB+6; y < H; y += 12) for (let x = 6; x < W; x += 12) g.fillRect(x,y,1,1);
+  // status bar
+  g.strokeStyle = css(accent); g.lineWidth = 1;
+  g.beginPath(); g.roundRect(6.5,4.5,24,11,2); g.stroke();
+  g.fillStyle = css(accent);
+  g.fillRect(30,7,2,5);
+  g.beginPath(); g.roundRect(8,6,17,7,1); g.fill();
+  g.font = "bold 9px ui-monospace,monospace"; g.fillStyle = "#fff";
+  g.fillText("82%", 38, 13);
+  g.globalAlpha = .4; g.fillStyle = css(accent); g.fillRect(0,SB,W,1); g.globalAlpha = 1;
+  // big pill + icon
+  const PILL = 88, cx = W-52, cy = SB + (H-SB)/2;
+  g.fillStyle = css(accent);
+  g.beginPath(); g.roundRect(cx-PILL/2, cy-PILL/2, PILL, PILL, PILL/4); g.fill();
+  const icon = maskToCanvas(masks[5], Math.round(PILL*0.72), contrastOf(accent), null);
+  g.drawImage(icon, cx - icon.width/2, cy - icon.height/2);
+  // title (approximate — the device uses its own bitmap font)
+  g.fillStyle = "#fff";
+  g.font = "bold 34px ui-monospace,'Cascadia Mono',monospace";
+  g.fillText("SETTINGS", 12, cy + 12);
+  g.setTransform(1,0,0,1,0,0);
+  // LED strip swatches
+  const on = bri > 0, lit = dim(ledRGB, Math.max(bri, 0));
+  $("strip").innerHTML = "";
+  for (let i = 0; i < 8; i++) {
+    const el = document.createElement("i");
+    el.style.background = on ? css(lit) : "#141a2c";
+    el.style.boxShadow = on ? `0 0 6px ${css(lit)}` : "none";
+    $("strip").appendChild(el);
+  }
+  document.documentElement.style.setProperty("--accent", css(accent));
+}
+
+function refresh() { drawPreview(); renderIcons(); updateBuildInfo(); }
+
+// ---------------------------------------------------------------- zip writer
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c>>>1) : c>>>1;
+    t[n] = c >>> 0; }
+  return t;
+})();
+function crc32(u8) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function makeZip(files) {                    // [{name, data}] — stored, no compression
+  const enc = new TextEncoder(), parts = [], central = [];
+  let offset = 0;
+  for (const f of files) {
+    const nb = enc.encode(f.name), crc = crc32(f.data), n = f.data.length;
+    const lh = new Uint8Array(30 + nb.length), lv = new DataView(lh.buffer);
+    lv.setUint32(0, 0x04034b50, true); lv.setUint16(4, 20, true);
+    lv.setUint16(8, 0, true); lv.setUint16(12, 0x21, true);
+    lv.setUint32(14, crc, true); lv.setUint32(18, n, true); lv.setUint32(22, n, true);
+    lv.setUint16(26, nb.length, true);
+    lh.set(nb, 30);
+    parts.push(lh, f.data);
+    const ch = new Uint8Array(46 + nb.length), cv = new DataView(ch.buffer);
+    cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true);
+    cv.setUint16(10, 0, true); cv.setUint16(14, 0x21, true);
+    cv.setUint32(16, crc, true); cv.setUint32(20, n, true); cv.setUint32(24, n, true);
+    cv.setUint16(28, nb.length, true); cv.setUint32(42, offset, true);
+    ch.set(nb, 46);
+    central.push(ch);
+    offset += lh.length + n;
+  }
+  const cdSize = central.reduce((a,c) => a + c.length, 0);
+  const eocd = new Uint8Array(22), ev = new DataView(eocd.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(8, files.length, true); ev.setUint16(10, files.length, true);
+  ev.setUint32(12, cdSize, true); ev.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, eocd], { type:"application/zip" });
+}
+
+// ---------------------------------------------------------------- build
+const slugify = s => (s.trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"") || "theme").slice(0,24);
+
+function updateBuildInfo() {
+  let n = 1;
+  if (customised.size) n++;
+  if (animFrames.length) n += animFrames.length;
+  const bytes = (customised.size ? 8 + ICON_BYTES*ICON_COUNT : 0) +
+                animFrames.reduce((a,f) => a + f.length, 0);
+  $("buildInfo").textContent = `${n} files · ${(bytes/1048576).toFixed(2)} MB`;
+}
+
+$("build").onclick = () => {
+  const name = $("name").value.trim() || "My Theme";
+  const slug = slugify(name);
+  const hex = id => $(id).value.slice(1).toUpperCase();
+  const files = [];
+
+  let txt = `# Theme pack for the T-Embed Dual-Boot Launcher\n`;
+  txt += `# Made with ${location.origin}${location.pathname}\n\n`;
+  txt += `name = ${name}\n`;
+  txt += `accent = ${hex("accent")}\n`;
+  txt += `led = ${hex("led")}\n`;
+  txt += `brightness = ${$("bri").value}\n`;
+  files.push({ name:`${slug}/theme.txt`, data:new TextEncoder().encode(txt) });
+
+  if (customised.size) {                       // full 20-icon set, TEIC format
+    const bin = new Uint8Array(8 + ICON_BYTES*ICON_COUNT);
+    bin.set([0x54,0x45,0x49,0x43, 1, ICON_COUNT, ICON_W, ICON_H], 0);
+    for (let i = 0; i < ICON_COUNT; i++) bin.set(masks[i], 8 + i*ICON_BYTES);
+    files.push({ name:`${slug}/icons.bin`, data:bin });
+  }
+  animFrames.forEach((f,i) =>
+    files.push({ name:`${slug}/boot/frame_${String(i).padStart(3,"0")}.raw`, data:f }));
+
+  const url = URL.createObjectURL(makeZip(files));
+  const a = document.createElement("a");
+  a.href = url; a.download = `${slug}-theme.zip`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+};
+
+// ---------------------------------------------------------------- init
+["accent","led"].forEach(id => $(id).oninput = refresh);
+$("bri").oninput = () => { $("briVal").textContent = $("bri").value + "%"; drawPreview(); };
+$("maxFrames").oninput = () => $("maxFramesVal").textContent = $("maxFrames").value;
+$("name").oninput = updateBuildInfo;
+
+(async () => {
+  try {
+    const buf = new Uint8Array(await (await fetch("icons_default.bin")).arrayBuffer());
+    const count = buf[5];
+    for (let i = 0; i < ICON_COUNT; i++)
+      defaultMasks.push(buf.slice(8 + i*ICON_BYTES, 8 + (i+1)*ICON_BYTES));
+  } catch (e) {                                 // offline / opened from disk: start blank
+    for (let i = 0; i < ICON_COUNT; i++) defaultMasks.push(new Uint8Array(ICON_BYTES));
+  }
+  masks = defaultMasks.map(m => m.slice());
+  refresh();
+})();
+</script>
+</body>
+</html>

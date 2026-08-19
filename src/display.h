@@ -39,6 +39,11 @@ void uiBackground();                                  // navy + faint dot grid
 void uiStatusBar();                                   // battery widget
 void uiIconMask(int icon, int cx, int cy, int size, uint16_t color); // scaled 1-bit icon
 
+// Custom icon set from a theme pack ("icons.bin" — see docs/theme.html). The file is a small
+// header plus ICON_COUNT 48x48 1-bit masks; once loaded it replaces the built-in icons.
+bool uiLoadIconPack(const String &path);
+void uiClearIconPack();
+
 // --- text (Cyberjunkies bitmap font) ---
 void uiTitleBar(const String &title);                 // big centred title + accent rule
 void uiTextCenter(const String &s, int y, uint8_t size, uint16_t fg, uint16_t bg = COL_BG);

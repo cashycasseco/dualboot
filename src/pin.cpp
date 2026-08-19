@@ -151,17 +151,7 @@ bool pinFlow() {
     waitButtonsReleased();
 
     String pin = loadStoredPin();
-    if (pin.isEmpty()) {
-        // No PIN yet: offer to set one, but never trap the user — backing out just boots
-        // unlocked and the offer returns next time.
-        String chosen = askTwice("Set PIN", "turn a pattern, then press");
-        if (!chosen.isEmpty()) {
-            saveStoredPin(chosen);
-            uiMessage("PIN saved", COL_OK);
-            delay(1000);
-        }
-        return true;
-    }
+    if (pin.isEmpty()) return true; // PIN lock is off — straight into the launcher, no prompt
 
     for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
         String entered = captureWheelSequence(
@@ -179,51 +169,53 @@ bool pinFlow() {
     return false;
 }
 
+// "PIN: on/off" is the single switch: turning it on asks for a new pattern, turning it off
+// asks for the current one and then clears it (no PIN stored = no prompt at boot).
 void pinSettingsMenu() {
     for (;;) {
         String pin = loadStoredPin();
-        std::vector<String> items;
-        if (pin.isEmpty()) items = {"Set PIN", "Back"};
-        else items = {"Change PIN", "Remove PIN", "Back"};
+        const bool on = !pin.isEmpty();
+        std::vector<Tile> tiles;
+        tiles.push_back({on ? "PIN: on" : "PIN: off", on ? IC_CHECK : IC_PIN, 0, 0});
+        if (on) tiles.push_back({"Change PIN", IC_PIN, 0, 0});
+        tiles.push_back({"Back", IC_BACK, 0, 0});
 
-        int sel = uiMenu("PIN", items);
-        if (sel < 0) return;
+        int sel = uiCarousel(tiles, "PIN", true);
+        if (sel < 0 || sel == (int)tiles.size() - 1) return; // Back / cancel
 
-        if (pin.isEmpty()) {
-            if (sel == 0) {
+        if (sel == 0) {          // toggle the lock
+            if (!on) {           // off -> on: pick a pattern
                 String chosen = askTwice("Set PIN", "turn a pattern, then press");
                 if (!chosen.isEmpty()) {
                     saveStoredPin(chosen);
-                    uiMessage("PIN saved", COL_OK);
+                    uiMessage("PIN on", COL_OK);
                     delay(1000);
                 }
-            } else return; // Back
-        } else {
-            if (sel == 0) { // Change
-                String cur = captureWheelSequence("Current PIN", "to change", true);
-                if (cur.isEmpty()) continue;
-                if (cur != pin) {
-                    uiError("Wrong PIN");
-                    delay(1000);
-                    continue;
-                }
-                String chosen = askTwice("New PIN", "turn a pattern, then press");
-                if (!chosen.isEmpty()) {
-                    saveStoredPin(chosen);
-                    uiMessage("PIN changed", COL_OK);
-                    delay(1000);
-                }
-            } else if (sel == 1) { // Remove
-                String cur = captureWheelSequence("Current PIN", "to remove", true);
+            } else { // on -> off: confirm with the current pattern first
+                String cur = captureWheelSequence("Current PIN", "to turn off", true);
                 if (cur.isEmpty()) continue;
                 if (cur == pin) {
                     clearStoredPin();
-                    uiMessage("PIN removed", COL_OK);
+                    uiMessage("PIN off", COL_OK);
                 } else {
                     uiError("Wrong PIN");
                 }
                 delay(1000);
-            } else return; // Back
+            }
+        } else if (on && sel == 1) { // change
+            String cur = captureWheelSequence("Current PIN", "to change", true);
+            if (cur.isEmpty()) continue;
+            if (cur != pin) {
+                uiError("Wrong PIN");
+                delay(1000);
+                continue;
+            }
+            String chosen = askTwice("New PIN", "turn a pattern, then press");
+            if (!chosen.isEmpty()) {
+                saveStoredPin(chosen);
+                uiMessage("PIN changed", COL_OK);
+                delay(1000);
+            }
         }
     }
 }

@@ -4,6 +4,7 @@
 #include "cyberfont.h"
 #include "icons_data.h"
 #include "input.h"
+#include <SD.h>
 #include <math.h>
 
 // SPI bus shared with the SD card; the ST7789 is the only device we drive here.
@@ -108,9 +109,56 @@ void uiStatusBar() {
 static inline bool iconBit(const uint8_t *row, int sx) {
     return row[sx >> 3] & (0x80 >> (sx & 7));
 }
+
+// Optional icon set loaded from a theme pack; null = use the compiled-in ICON_BITS.
+static const size_t kIconBytes = (size_t)ICON_STRIDE * ICON_H;
+static uint8_t *sIconPack = nullptr;
+
+static inline const uint8_t *iconRows(int icon) {
+    return sIconPack ? (sIconPack + (size_t)icon * kIconBytes) : ICON_BITS[icon];
+}
+
+void uiClearIconPack() {
+    if (sIconPack) {
+        free(sIconPack);
+        sIconPack = nullptr;
+    }
+}
+
+// icons.bin: "TEIC", version(1), count, width, height, then count * stride * height mask bytes.
+bool uiLoadIconPack(const String &path) {
+    File f = SD.open(path);
+    if (!f) return false;
+    uint8_t hdr[8];
+    bool ok = f.read(hdr, sizeof(hdr)) == (int)sizeof(hdr) && hdr[0] == 'T' && hdr[1] == 'E' &&
+              hdr[2] == 'I' && hdr[3] == 'C' && hdr[4] == 1 && hdr[6] == ICON_W && hdr[7] == ICON_H;
+    const int count = ok ? hdr[5] : 0;
+    if (!ok || count < 1 || count > ICON_COUNT) {
+        f.close();
+        return false;
+    }
+    uint8_t *buf = (uint8_t *)ps_malloc(kIconBytes * ICON_COUNT);
+    if (!buf) buf = (uint8_t *)malloc(kIconBytes * ICON_COUNT);
+    if (!buf) {
+        f.close();
+        return false;
+    }
+    // Start from the built-ins so a short pack only overrides the icons it actually ships.
+    for (int i = 0; i < ICON_COUNT; ++i) memcpy(buf + (size_t)i * kIconBytes, ICON_BITS[i], kIconBytes);
+    const bool read = f.read(buf, kIconBytes * count) == (int)(kIconBytes * count);
+    f.close();
+    if (!read) {
+        free(buf);
+        return false;
+    }
+    uiClearIconPack();
+    sIconPack = buf;
+    return true;
+}
+
 void uiIconMask(int icon, int cx, int cy, int size, uint16_t color) {
     if (icon <= 0 || icon >= ICON_COUNT || size <= 0) return;
-    const uint8_t *bits = ICON_BITS[icon];
+    const uint8_t *bits = iconRows(icon);
     const int x0 = cx - size / 2, y0 = cy - size / 2;
     for (int dy = 0; dy < size; ++dy) {
         const uint8_t *row = bits + (dy * ICON_H / size) * ICON_STRIDE;
@@ -193,7 +241,7 @@ static float easeOut(float t) { return 1.0f - powf(1.0f - t, 3.0f); }
 static void iconMaskClip(int icon, int cx, int cy, int size, uint16_t color, int clipTop,
                          int clipBot) {
     if (icon <= 0 || icon >= ICON_COUNT || size <= 0) return;
-    const uint8_t *bits = ICON_BITS[icon];
+    const uint8_t *bits = iconRows(icon);
     const int x0 = cx - size / 2, y0 = cy - size / 2;
     for (int dy = 0; dy < size; ++dy) {
         const int py = y0 + dy;

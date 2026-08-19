@@ -20,11 +20,12 @@ Nothing but the launcher ships on the device — you add the rest.
 - **USB drive mode.** Expose the SD card as a USB mass-storage drive to copy files from your PC
   without removing it.
 - **Web-flashable.** Install the launcher onto a fresh device from the browser — no toolchain.
-- **Themeable.** Full-spectrum accent-colour picker, a WS2812 LED colour + brightness, coordinated
-  theme presets, and **your own themes as simple text files on the SD card**.
-- **Custom boot animation.** Ships with a built-in animation; drop your own frames on the SD card
-  to replace it. Can be turned off.
-- **Wheel-pattern PIN lock**, battery percentage + charging indicator, power-off.
+- **Themeable.** Full-spectrum accent-colour picker, WS2812 LED colour + brightness (0 % = off),
+  coordinated presets, and **complete custom theme packs** — colours, your own icons and your own
+  boot animation — built in the browser with the [theme creator](https://loznoc.github.io/dualboot/theme.html).
+- **Custom boot animation.** Ships with a built-in animation; drop a GIF into the theme creator (or
+  your own frames on the SD card) to replace it. Can be turned off.
+- **Optional wheel-pattern PIN lock**, battery percentage + charging indicator, power-off.
 - **Bauhaus / Flipper / hacker** look: one big sliding icon per screen, a bitmap "Cyberjunkies"
   title font, crisp Material icons, and an Oreo-cat mascot on the install screen.
 
@@ -89,38 +90,55 @@ themes, or boot frames, then press back — the launcher re-reads the card.
   shows its own colour.
 - **Color** — the UI accent colour; scroll through the full spectrum.
 - **LED Color** — the WS2812 strip colour (or off), full spectrum.
-- **Bright** — LED brightness; turn for ±5 %, press to save.
+- **Bright** — LED brightness; turn for ±5 %, press to save. **0 % turns the LEDs off.**
 - **Boot** — turn the boot animation on/off, preview it, or read the frame requirements.
 
-#### Custom themes (SD card)
+#### Make a theme — the easy way
 
-Put `.txt` files in a **`/themes`** folder on the SD card (the launcher creates the folder with an
-`example.txt` the first time you open the Theme menu). Each file is one theme:
+Open the **[theme creator](https://loznoc.github.io/dualboot/theme.html)**, pick your colours,
+optionally replace any icons with your own images, optionally drop in a **GIF** for the boot
+animation, and download the pack. Everything runs in your browser — nothing is uploaded.
 
-```ini
-# Colours are hex RRGGBB. Edit these over USB drive mode.
-name = Cyberpunk
-accent = 00E5FF      # screen / UI colour
-led    = FF00AA      # LED strip colour (optional, defaults to accent)
-brightness = 70      # optional, 5-100
+Then unzip it into a **`/themes`** folder on the SD card (use **USB** drive mode so you don't have
+to take the card out) and pick it under **Settings → Design → Theme**. Colours, icons and the boot
+animation all switch over at once.
+
+#### Theme format (if you'd rather write it yourself)
+
+A theme is either a single `.txt` file in `/themes`, or a **folder** — a "pack" — that can also
+carry icons and an animation:
+
+```
+/themes/cyberpunk/theme.txt        colours (required)
+/themes/cyberpunk/icons.bin        custom icon set   (optional)
+/themes/cyberpunk/boot/*.raw       boot animation    (optional)
 ```
 
-They appear in **Settings → Design → Theme** with their own colour swatch. Parsing is forgiving:
-`#` comments, `#RRGGBB` or `RRGGBB`, and a missing `led` falls back to the accent.
+`theme.txt` is plain `key = value`, `#` starts a comment:
 
-#### Custom boot animation (SD card)
+```ini
+name = Cyberpunk
+accent = 00E5FF      # screen / UI colour, hex RRGGBB
+led    = FF00AA      # LED strip colour (optional, defaults to accent)
+brightness = 70      # optional, 0-100 (0 = LEDs off)
+```
 
-Put frames in a **`/boot`** folder on the SD card. They play in file-name order and replace the
-built-in animation. Each frame is one `.raw` file:
+`icons.bin` is `"TEIC"`, version `1`, icon count, width, height (all single bytes after the magic),
+followed by that many **48 × 48 one-bit masks** (6 bytes per row, MSB first) in the order of
+`enum Icon` in `src/display.h`. The launcher tints them to the theme, so only the shape matters.
+
+**Boot frames** live in the pack's `boot/` folder, or in a top-level **`/boot`** folder to override
+the animation regardless of theme. They play in file-name order; each frame is one `.raw` file:
 
 - 2 bytes width + 2 bytes height (little-endian),
 - then `width × height` pixels, **RGB565**, little-endian.
-- Max size **320 × 170**; it's scaled to the screen. ~20 fps.
+- Max size **320 × 170**; frames are scaled to the screen. ~20 fps.
 
 ### PIN lock
 
-The launcher can be locked with a **pattern of wheel turns** (left/right) instead of digits. Set,
-change, or remove it under **Settings → PIN**.
+The launcher can be locked with a **pattern of wheel turns** (left/right) instead of digits — it's
+**off by default**. Turn it on, change it, or turn it back off under **Settings → PIN**; with it off
+the launcher boots straight to the menu with no prompt.
 
 ---
 
@@ -184,7 +202,8 @@ boards/         the lilygo-t-embed-cc1101 board variant
 bootloader/     custom 2nd-stage bootloader (prebuilt .bin + source)
 partitions.csv  the layout above
 firmware/       prebuilt launcher.bin
-docs/           the browser web-flasher (GitHub Pages) + preview image
+docs/           GitHub Pages: the web flasher (index.html), the theme creator
+                (theme.html) and the built-in icon set it starts from
 ```
 
 ---

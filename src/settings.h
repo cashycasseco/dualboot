@@ -1,4 +1,5 @@
 #pragma once
+#include <Arduino.h>
 
 // Loads the saved theme (UI accent + LED colour) from NVS and applies it. Call once at
 // boot, before the first screen is drawn and after the LED strip is ready.
@@ -12,3 +13,6 @@ void powerOffDevice();
 
 // Boot preference (read by setup() to decide whether to play the animation).
 bool bootAnimEnabled();
+
+// The active theme pack's boot-frame folder, or "" if it has none (then /boot is used).
+String themeBootDir();

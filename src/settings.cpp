@@ -36,14 +36,22 @@ static const int PAL_N = (int)(sizeof(PAL) / sizeof(PAL[0]));
 static uint16_t sAccent = 0x2FEB;
 static uint8_t sLedR = 0, sLedG = 220, sLedB = 40;
 static bool sLedOn = true;
-static int briPct = 40;              // LED brightness percent (5..100)
-static bool bootAnimOn = true; // play the boot animation at startup
+static int briPct = 40;              // LED brightness percent (0 = off .. 100)
+static bool bootAnimOn = true;       // play the boot animation at startup
+static String sThemeDir;             // active theme-pack folder ("" = none/built-in)
 
 bool bootAnimEnabled() { return bootAnimOn; }
 
+// The active theme pack's boot-frame folder, or "" when it has none. bootanim.cpp prefers
+// this over the generic /boot folder, so a pack can ship its own startup animation.
+String themeBootDir() {
+    if (sThemeDir.length() && SD.exists(sThemeDir + "/boot")) return sThemeDir + "/boot";
+    return String("");
+}
+
 static void applyTheme() {
     gAccent = sAccent;
-    if (!sLedOn) {
+    if (!sLedOn || briPct <= 0) { // 0 % is a real "off" for the strip
         rgbStripOff();
         return;
     }
@@ -60,6 +68,7 @@ static void save() {
     p.putBool("ledon", sLedOn);
     p.putInt("bripct", briPct);
     p.putBool("banim", bootAnimOn);
+    p.putString("thdir", sThemeDir);
     p.end();
 }
 
@@ -71,9 +80,13 @@ void settingsLoad() {
     sLedG = p.getUChar("lg", 220);
     sLedB = p.getUChar("lb", 40);
     sLedOn = p.getBool("ledon", true);
-    briPct = constrain(p.getInt("bripct", 40), 5, 100);
+    briPct = constrain(p.getInt("bripct", 40), 0, 100);
     bootAnimOn = p.getBool("banim", true);
+    sThemeDir = p.getString("thdir", "");
     p.end();
+    // A theme pack may also carry its own icon set; load it before the first screen is drawn.
+    if (sThemeDir.length() && sdInit() && SD.exists(sThemeDir + "/icons.bin"))
+        uiLoadIconPack(sThemeDir + "/icons.bin");
     applyTheme();
 }
 
@@ -162,7 +175,8 @@ static void drawBrightness(int pct) {
     uiBackground();
     uiTitleBar("BRIGHTNESS");
     char b[8];
-    snprintf(b, sizeof(b), "%d%%", pct);
+    if (pct <= 0) snprintf(b, sizeof(b), "OFF"); // 0 % turns the strip off completely
+    else snprintf(b, sizeof(b), "%d%%", pct);
     uiTextCenter(b, 52, 3, gAccent);
     const int x = 30, y = 108, w = scrW() - 60, h = 16;
     gfx->fillRoundRect(x, y, w, h, h / 2, uiDim(gAccent, 22));
@@ -172,17 +186,22 @@ static void drawBrightness(int pct) {
 }
 
 static void ledBrightnessMenu() {
-    if (!sLedOn) sLedOn = true; // adjusting brightness implies the LED is on
     const int start = briPct;
+    const bool startOn = sLedOn;
+    sLedOn = true; // the slider owns the strip while it is open; 0 % is how you turn it off
     inputDrain();
     bool redraw = true;
     for (;;) {
         if (redraw) { drawBrightness(briPct); redraw = false; }
         switch (inputPoll()) {
             case EV_RIGHT: briPct = min(100, briPct + 5); applyTheme(); redraw = true; break;
-            case EV_LEFT:  briPct = max(5, briPct - 5);  applyTheme(); redraw = true; break;
+            case EV_LEFT:  briPct = max(0, briPct - 5);   applyTheme(); redraw = true; break;
             case EV_PRESS: save(); return;
-            case EV_BACK:  briPct = start; applyTheme(); return; // cancel restores
+            case EV_BACK:
+                briPct = start; // cancel restores what we started with
+                sLedOn = startOn;
+                applyTheme();
+                return;
             default: break;
         }
         delay(12);
@@ -196,6 +215,7 @@ struct ThemeDef {
     uint16_t accent;
     uint8_t r, g, b; // LED colour
     int bri;         // -1 = keep current brightness
+    String dir;      // theme-pack folder ("" = built-in preset or a plain .txt theme)
 };
 
 // Built-in presets, coordinated accent+LED pairs drawn from PAL.
@@ -251,7 +271,7 @@ static bool parseThemeFile(const String &path, ThemeDef &t) {
             t.name = val;
         } else if (key == "accent") { accent = parseHex(val); haveAccent = true; }
         else if (key == "led") { led = parseHex(val); haveLed = true; }
-        else if (key == "brightness") t.bri = constrain(firstToken(val).toInt(), 5, 100);
+        else if (key == "brightness") t.bri = constrain(firstToken(val).toInt(), 0, 100);
     }
     f.close();
     if (!haveAccent) return false;
@@ -270,40 +290,57 @@ static void ensureThemesExample() {
     File f = SD.open("/themes/example.txt", FILE_WRITE);
     if (!f) return;
     f.print("# Custom theme for the T-Embed launcher.\n"
-            "# Drop .txt files in this /themes folder (edit them over USB drive mode),\n"
-            "# then pick them under Settings > Design > Theme. Colours are hex RRGGBB.\n\n"
+            "# Build complete packs (colours + icons + boot animation) with the web editor:\n"
+            "#   https://loznoc.github.io/dualboot/theme.html\n"
+            "# ...or just drop simple .txt files like this one in /themes and pick them under\n"
+            "# Settings > Design > Theme. Colours are hex RRGGBB.\n\n"
             "name = Example\n"
             "accent = 2FE85A      # screen / UI colour\n"
             "led    = FF3CA0      # LED strip colour (optional, defaults to accent)\n"
-            "brightness = 60      # optional, 5-100\n");
+            "brightness = 60      # optional, 0-100 (0 = LEDs off)\n");
     f.close();
 }
 
-// Built-ins first, then every valid /themes/*.txt from the SD card (sorted by file name).
+// Built-ins first, then the SD card's /themes: both plain "<name>.txt" files and full theme
+// PACKS, i.e. a "<name>/" folder holding theme.txt plus optional icons.bin and boot/ frames.
 static std::vector<ThemeDef> themesAll() {
     std::vector<ThemeDef> v;
     for (int i = 0; i < BUILTIN_N; ++i)
         v.push_back({BUILTIN[i].name, PAL[BUILTIN[i].accent].rgb565, PAL[BUILTIN[i].led].r,
-                     PAL[BUILTIN[i].led].g, PAL[BUILTIN[i].led].b, -1});
+                     PAL[BUILTIN[i].led].g, PAL[BUILTIN[i].led].b, -1, ""});
     if (sdInit()) {
         File dir = SD.open("/themes");
         if (dir && dir.isDirectory()) {
-            std::vector<String> files;
+            std::vector<String> files, packs;
             for (File f = dir.openNextFile(); f; f = dir.openNextFile()) {
-                if (f.isDirectory()) continue;
                 String n = f.name();
                 int sl = n.lastIndexOf('/');
                 if (sl >= 0) n = n.substring(sl + 1);
+                if (f.isDirectory()) {
+                    packs.push_back(n);
+                    continue;
+                }
                 String low = n;
                 low.toLowerCase();
                 if (low.endsWith(".txt") || low.endsWith(".thm")) files.push_back(n);
             }
             dir.close();
             std::sort(files.begin(), files.end());
+            std::sort(packs.begin(), packs.end());
             for (const String &n : files) {
                 ThemeDef t;
                 if (parseThemeFile("/themes/" + n, t)) {
                     if (t.name.length() == 0) t.name = n.substring(0, n.lastIndexOf('.'));
+                    t.dir = "";
+                    v.push_back(t);
+                }
+            }
+            for (const String &n : packs) { // folder packs
+                ThemeDef t;
+                const String base = "/themes/" + n;
+                if (parseThemeFile(base + "/theme.txt", t)) {
+                    if (t.name.length() == 0) t.name = n;
+                    t.dir = base;
                     v.push_back(t);
                 }
             }
@@ -317,7 +354,8 @@ static void themesMenu() {
     std::vector<ThemeDef> themes = themesAll();
     std::vector<Tile> tiles;
     for (const ThemeDef &t : themes) {
-        bool active = sAccent == t.accent && sLedOn && sLedR == t.r && sLedG == t.g && sLedB == t.b;
+        bool active = sAccent == t.accent && sLedOn && sLedR == t.r && sLedG == t.g &&
+                      sLedB == t.b && sThemeDir == t.dir;
         tiles.push_back({t.name, active ? IC_CHECK : IC_NONE, 0, t.accent});
     }
     tiles.push_back({"Back", IC_BACK, 0, 0});
@@ -330,6 +368,10 @@ static void themesMenu() {
     sLedB = t.b;
     sLedOn = true;
     if (t.bri >= 0) briPct = t.bri;
+    // A pack can also replace the icon set; a plain theme restores the built-in icons.
+    sThemeDir = t.dir;
+    if (t.dir.length() && SD.exists(t.dir + "/icons.bin")) uiLoadIconPack(t.dir + "/icons.bin");
+    else uiClearIconPack();
     applyTheme();
     save();
 }
@@ -352,7 +394,8 @@ static void drawAnimTutorial() {
     line("Each frame = one .raw file:");
     line("  2B width + 2B height (LE), then");
     line("  width*height RGB565 pixels.");
-    line("Max size: 320 x 170.  ~20 fps.");
+    line("Max 320x170, ~20 fps. Drop a GIF at");
+    line("loznoc.github.io/dualboot/theme.html");
     uiTextCenter("press = preview     back = exit", scrH() - 12, 1, gAccent);
     uiFlush();
 }

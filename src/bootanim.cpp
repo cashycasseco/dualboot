@@ -3,6 +3,7 @@
 #include "display.h"
 #include "input.h"
 #include "sdcard.h"
+#include "settings.h"
 #include <SD.h>
 #include <algorithm>
 #include <vector>
@@ -22,11 +23,14 @@ static void scaleAndDraw(const uint16_t *src, int w, int h, uint16_t *out, int S
     uiFlush();
 }
 
-// Custom animation from the SD card: a "/boot" folder of *.raw frames, each = uint16 w,
-// uint16 h (little-endian), then w*h RGB565 pixels. Frames play in file-name order.
+// Custom animation from the SD card: a folder of *.raw frames, each = uint16 w, uint16 h
+// (little-endian), then w*h RGB565 pixels. Frames play in file-name order. The active theme
+// pack's own boot/ folder wins; otherwise the generic /boot folder is used.
 static bool playSdBootAnimation(uint16_t *out, int SW, int SH) {
     if (!sdReady()) return false;
-    File dir = SD.open("/boot");
+    String base = themeBootDir();
+    if (base.length() == 0) base = "/boot";
+    File dir = SD.open(base);
     if (!dir || !dir.isDirectory()) {
         if (dir) dir.close();
         return false;
@@ -52,7 +56,7 @@ static bool playSdBootAnimation(uint16_t *out, int SW, int SH) {
     bool drew = false;
     for (const String &nm : frames) {
         if (inputPoll() != EV_NONE) break; // skippable
-        File f = SD.open("/boot/" + nm);
+        File f = SD.open(base + "/" + nm);
         if (!f) continue;
         uint8_t hdr[4];
         if (f.read(hdr, 4) != 4) {
