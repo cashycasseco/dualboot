@@ -49,6 +49,40 @@ static String deriveName(const String &file) {
     return n;
 }
 
+// Let the user choose the icon a slot shows in the main menu. Returns true if one was picked.
+static bool pickSlotIcon(const AppSlot &s, const String &name) {
+    int n = 0;
+    const int *choices = appIconChoices(n);
+    const int current = appSlotIcon(s.part->label);
+    std::vector<Tile> tiles;
+    for (int i = 0; i < n; ++i)
+        tiles.push_back({choices[i] == current ? String("Current") : name, choices[i], 0, 0});
+    tiles.push_back({"Back", IC_BACK, 0, 0});
+    const int sel = uiCarousel(tiles, "ICON", true);
+    if (sel < 0 || sel >= n) return false;
+    appSetIcon(s.part->label, choices[sel]);
+    return true;
+}
+
+// Change the icon of any installed slot (Settings -> Icons).
+static void slotIconsMenu() {
+    for (;;) {
+        std::vector<AppSlot> apps = appsList();
+        if (apps.empty()) {
+            uiMessage("No apps installed", COL_MUTED);
+            delay(1200);
+            return;
+        }
+        std::vector<Tile> tiles;
+        for (const AppSlot &a : apps)
+            tiles.push_back({appSlotDisplay(a), appSlotIcon(a.part->label), 0, 0});
+        tiles.push_back({"Back", IC_BACK, 0, 0});
+        const int sel = uiCarousel(tiles, "SLOT ICONS", true);
+        if (sel < 0 || sel >= (int)apps.size()) return;
+        pickSlotIcon(apps[sel], appSlotDisplay(apps[sel]));
+    }
+}
+
 // Pick any .bin from the SD card and write it into a chosen slot (so the launcher is not
 // tied to Bruce/Flipper — anything in the card root shows up here).
 static void installFromSdMenu() {
@@ -91,9 +125,14 @@ static void installFromSdMenu() {
         g_catT0 = millis();
         uiInstallScreen(name, 0, 0);
         const bool ok = appInstallFromSd(("/" + file).c_str(), slots[ssel].part, name, drawInstallProgress);
-        if (ok) uiMessage(name + " installed", COL_OK);
-        else uiError("Install failed");
-        delay(1800);
+        if (ok) {
+            uiMessage(name + " installed", COL_OK);
+            delay(1200);
+            pickSlotIcon(slots[ssel], name); // offer an icon while we are here; BACK keeps the default
+        } else {
+            uiError("Install failed");
+            delay(1800);
+        }
         return;
     }
 }
@@ -185,17 +224,19 @@ static void powerMenu() {
 static void settingsGrid() {
     for (;;) {
         std::vector<Tile> tiles = {
-            {"Design", IC_DESIGN, 0}, {"Delete", IC_DELETE, 0}, {"PIN", IC_PIN, 0},
-            {"About", IC_ABOUT, 0},   {"Power", IC_OFF, 0},     {"Back", IC_BACK, 0},
+            {"Design", IC_DESIGN, 0}, {"Icons", IC_STAR, 0},  {"Delete", IC_DELETE, 0},
+            {"PIN", IC_PIN, 0},       {"About", IC_ABOUT, 0}, {"Power", IC_OFF, 0},
+            {"Back", IC_BACK, 0},
         };
         int sel = uiGrid("SETTINGS", tiles, serialConsolePoll);
-        if (sel < 0 || sel == 5) return;
+        if (sel < 0 || sel == 6) return;
         switch (sel) {
             case 0: appearanceMenu(); break;
-            case 1: deleteAppsMenu(); break;
-            case 2: pinSettingsMenu(); break;
-            case 3: aboutScreen(); break;
-            case 4: powerMenu(); break;
+            case 1: slotIconsMenu(); break;
+            case 2: deleteAppsMenu(); break;
+            case 3: pinSettingsMenu(); break;
+            case 4: aboutScreen(); break;
+            case 5: powerMenu(); break;
         }
     }
 }
@@ -206,9 +247,9 @@ static void mainMenu() {
         std::vector<Tile> tiles;
         for (const AppSlot &s : slots) {
             Tile t;
-            t.badge = s.index + 1;
+            t.badge = s.installed ? s.index + 1 : 0;        // number only on filled slots
             t.label = appSlotDisplay(s);                    // shared with the delete menu
-            t.icon = (t.label == "Empty") ? IC_EMPTY : IC_APP;
+            t.icon = s.installed ? appSlotIcon(s.part->label) : IC_EMPTY;
             tiles.push_back(t);
         }
         const int nSlots = (int)slots.size();

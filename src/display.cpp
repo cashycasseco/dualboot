@@ -263,13 +263,11 @@ static void drawItemIcon(const Tile &t, bool pickerMode, int cy, uint16_t ink, i
                          int clipBot) {
     const int cx = pillCX();
     const int is = (int)(PILL * 0.72f);
-    if (!pickerMode && t.icon == IC_APP) {
-        iconMaskClip(IC_APP, cx, cy - 8, is, ink, clipTop, clipBot);
-        if (t.badge) {
-            char b[4];
-            snprintf(b, sizeof(b), "%d", t.badge);
-            cyDrawTop(gfx, CY_S, cx - cyTextW(CY_S, b, 2) / 2, cy + PILL / 2 - CY_S.lineH * 2 - 2, b, ink, 2);
-        }
+    if (!pickerMode && t.badge > 0) { // a filled app slot: its own icon plus the slot number
+        iconMaskClip(t.icon, cx, cy - 8, is, ink, clipTop, clipBot);
+        char b[4];
+        snprintf(b, sizeof(b), "%d", t.badge);
+        cyDrawTop(gfx, CY_S, cx - cyTextW(CY_S, b, 2) / 2, cy + PILL / 2 - CY_S.lineH * 2 - 2, b, ink, 2);
     } else if (t.icon == IC_NONE) {
         if (!t.tint) iconMaskClip(IC_FILE, cx, cy, is, ink, clipTop, clipBot); // generic list chip
         // pure colour swatch: the pill colour is the content, no icon

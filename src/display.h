@@ -21,6 +21,10 @@ enum Icon {
     IC_NONE = 0, IC_APP, IC_EMPTY, IC_INSTALL, IC_USB, IC_SETTINGS, IC_DESIGN,
     IC_DELETE, IC_BACK, IC_PIN, IC_ABOUT, IC_OFF, IC_LEDBRIGHT, IC_LEDCOLOR,
     IC_ANIM, IC_COLOR, IC_THEME, IC_FLASH, IC_FILE, IC_CHECK, IC_WIFI,
+    // Pickable per-slot app icons (appIconChoices() in apps.cpp offers these).
+    IC_GHOST, IC_ANTENNA, IC_BUG, IC_SKULL, IC_GAMEPAD, IC_CHIP, IC_KEY, IC_SHIELD,
+    IC_TERMINAL, IC_NFC, IC_WRENCH, IC_STAR,
+    IC_COUNT_ // sentinel: one past the last icon
 };
 
 struct Tile {

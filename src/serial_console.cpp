@@ -144,9 +144,18 @@ static void handleLine(String cmd) {
     } else if (cmd == "help") {
         USBSerial.println("commands: flash <slot> <size> | name <1-3> <text> | info | sd | themes | bat | usbon | usboff | download | help");
     } else if (cmd == "info") {
-        auto apps = appsList();
-        if (apps.empty()) USBSerial.println("no apps installed");
-        for (auto &app : apps) USBSerial.printf("installed: %s\n", app.name.c_str());
+        // Every slot, not just the filled ones: "installed" comes from the image magic byte at
+        // the start of the partition, so this shows exactly what the menu decides from.
+        const esp_partition_t *boot = esp_ota_get_boot_partition();
+        for (const AppSlot &s : appAllSlots()) {
+            uint8_t magic = 0;
+            esp_partition_read(s.part, 0, &magic, 1);
+            USBSerial.printf("slot %d  %-8s  magic=0x%02X  %-9s  name='%s'  icon=%d%s\n",
+                             s.index + 1, s.part->label, magic,
+                             s.installed ? "INSTALLED" : "empty",
+                             appStoredName(s.part->label).c_str(), appSlotIcon(s.part->label),
+                             (boot && boot == s.part) ? "  <- boot slot" : "");
+        }
     } else if (cmd == "peek") {
         // Dump the first byte at a few offsets of the first .bin/.PFILE in root, to see
         // whether a .PFILE wrapper just prepends a header (0xE9 shows up shifted by 4096)

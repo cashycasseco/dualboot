@@ -63,11 +63,12 @@ the chip first for a clean install.
 
 **Main menu** (turn the wheel to move, press to select, top button = back):
 
-- **Slot 1–3** — an installed app (press to boot it) or `Empty` (press to install into it).
+- **Slot 1–3** — an installed app (press to boot it) or `Empty` (press to install into it). Each
+  slot carries its own icon, chosen when you install it or later under **Settings → Icons**.
 - **Install** — pick a `.bin` from the SD card, choose a slot, name it.
 - **USB** — expose the SD card as a USB drive.
 - **WiFi** — start the upload hotspot (see below).
-- **Settings** — design, delete apps, PIN, about, power.
+- **Settings** — design, slot icons, delete apps, PIN, about, power.
 
 **Booting an app:** selecting an installed slot sets it as the boot target and restarts. The
 custom bootloader honours that choice on the *software* restart, so the app runs. On the next

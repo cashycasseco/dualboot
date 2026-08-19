@@ -104,7 +104,9 @@
     <p class="hint">Click an icon to replace it with your own image (PNG, SVG, JPG). It's scaled to
       48×48 and reduced to a 1-bit mask — the launcher tints it to match the theme, so shape is all
       that matters. Transparent PNGs work best. Click a replaced icon again to re-upload, or use
-      <b>invert</b> / <b>reset</b> below it.</p>
+      <b>invert</b> / <b>reset</b> below it.<br>
+      Icons marked <b>*</b> are the ones you can assign to an app slot on the device
+      (<b>Settings → Icons</b>), so restyling those restyles your app tiles.</p>
     <div class="icons" id="icons"></div>
     <div style="margin-top:14px" class="dl">
       <button class="ghost" id="resetIcons">Reset all icons</button>
@@ -180,10 +182,13 @@
 const ICON_W = 48, ICON_H = 48, ICON_STRIDE = 6, ICON_BYTES = ICON_STRIDE * ICON_H;
 // Must match enum Icon in src/display.h (index 0 = "no icon" and is not editable).
 const ICON_NAMES = ["NONE","APP","EMPTY","INSTALL","USB","SETTINGS","DESIGN","DELETE","BACK","PIN",
-  "ABOUT","OFF","LEDBRIGHT","LEDCOLOR","ANIM","COLOR","THEME","FLASH","FILE","CHECK","WIFI"];
+  "ABOUT","OFF","LEDBRIGHT","LEDCOLOR","ANIM","COLOR","THEME","FLASH","FILE","CHECK","WIFI",
+  "GHOST","ANTENNA","BUG","SKULL","GAMEPAD","CHIP","KEY","SHIELD","TERMINAL","NFC","WRENCH","STAR"];
 const ICON_LABELS = ["","App slot","Empty slot","Install (SD)","USB drive","Settings","Design",
   "Delete","Back","PIN","About","Power","Brightness","LED colour","Animation","Colour","Theme",
-  "Flash","File","Selected","Wi-Fi upload"];
+  "Flash","File","Selected","Wi-Fi upload",
+  "Ghost *","Antenna *","Bug *","Skull *","Gamepad *","Chip *","Key *","Shield *","Terminal *",
+  "NFC *","Wrench *","Star *"];
 const ICON_COUNT = ICON_NAMES.length;
 
 let defaultMasks = [];            // Uint8Array(ICON_BYTES) per icon, from icons_default.bin

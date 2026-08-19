@@ -36,5 +36,11 @@ String appStoredName(const char *label);
 void appSetName(const char *label, const String &name);
 void appClearName(const char *label);
 
+// Per-slot icon. appSlotIcon() falls back to the default app icon when none was chosen.
+int  appSlotIcon(const char *label);
+void appSetIcon(const char *label, int icon);
+// The icons offered in the picker, in display order.
+const int *appIconChoices(int &count);
+
 // Erase a slot's app image and forget its stored name (uninstall).
 bool appDelete(const esp_partition_t *part);
