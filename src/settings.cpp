@@ -86,8 +86,12 @@ void settingsLoad() {
     sThemeDir = p.getString("thdir", "");
     p.end();
     // A theme pack may also carry its own icon set; load it before the first screen is drawn.
-    if (sThemeDir.length() && sdInit() && SD.exists(sThemeDir + "/icons.bin"))
-        uiLoadIconPack(sThemeDir + "/icons.bin");
+    // A saved path that no longer exists (card swapped, pack deleted, or the folder renamed from
+    // the old /themes) is simply forgotten — the colours stay, the icons fall back to built-in.
+    if (sThemeDir.length() && sdInit()) {
+        if (SD.exists(sThemeDir + "/icons.bin")) uiLoadIconPack(sThemeDir + "/icons.bin");
+        else if (!SD.exists(sThemeDir)) sThemeDir = "";
+    }
     applyTheme();
 }
 
@@ -290,17 +294,17 @@ static bool parseThemeFile(const String &path, ThemeDef &t) {
     return true;
 }
 
-// Create /themes with a self-documenting example the first time, so the feature is discoverable.
+// Create the theme folder with a self-documenting example the first time, so it is discoverable.
 static void ensureThemesExample() {
-    if (!sdInit() || SD.exists("/themes")) return;
-    SD.mkdir("/themes");
-    File f = SD.open("/themes/example.txt", FILE_WRITE);
+    if (!sdInit() || SD.exists(THEMES_DIR)) return;
+    SD.mkdir(THEMES_DIR);
+    File f = SD.open(THEMES_DIR "/example.txt", FILE_WRITE);
     if (!f) return;
     f.print("# Custom theme for the T-Embed launcher.\n"
             "# Build complete packs (colours + icons + boot animation) with the web editor:\n"
             "#   https://loznoc.github.io/dualboot/theme.html\n"
-            "# ...or just drop simple .txt files like this one in /themes and pick them under\n"
-            "# Settings > Design > Theme. Colours are hex RRGGBB.\n\n"
+            "# ...or just drop simple .txt files like this one in " THEMES_DIR " and pick them\n"
+            "# under Settings > Design > Theme. Colours are hex RRGGBB.\n\n"
             "name = Example\n"
             "accent = 2FE85A      # screen / UI colour\n"
             "led    = FF3CA0      # LED strip colour (optional, defaults to accent)\n"
@@ -308,7 +312,7 @@ static void ensureThemesExample() {
     f.close();
 }
 
-// The basename of a path, since some SD cores return "/themes/x.txt" from name().
+// The basename of a path, since some SD cores return a full path from name().
 static String baseName(String n) {
     int sl = n.lastIndexOf('/');
     return sl >= 0 ? n.substring(sl + 1) : n;
@@ -366,13 +370,13 @@ static bool loadPack(const String &base, const String &folderName, ThemeDef &t, 
         t.dir = base;
         return true;
     }
-    if (depth < 1)                                     // e.g. /themes/pack-theme/pack/theme.txt
+    if (depth < 1)                                     // e.g. <dir>/pack-theme/pack/theme.txt
         for (const String &d : dirs)
             if (loadPack(base + "/" + d, d, t, depth + 1)) return true;
     return false;
 }
 
-// Built-ins first, then the SD card's /themes: both plain "<name>.txt" files and full theme
+// Built-ins first, then the SD card's theme folder: both plain "<name>.txt" files and full theme
 // PACKS, i.e. a "<name>/" folder holding theme.txt plus optional icons.bin and boot/ frames.
 static std::vector<ThemeDef> themesAll(String *report = nullptr) {
     std::vector<ThemeDef> v;
@@ -384,17 +388,17 @@ static std::vector<ThemeDef> themesAll(String *report = nullptr) {
         if (report) *report = "SD not mounted";
         return v;
     }
-    if (!SD.exists("/themes")) {
-        if (report) *report = "no /themes folder on the card";
+    if (!SD.exists(THEMES_DIR)) {
+        if (report) *report = "no " THEMES_DIR " folder on the card";
         return v;
     }
     std::vector<String> files, dirs;
-    listDir("/themes", files, dirs);
+    listDir(THEMES_DIR, files, dirs);
     int okFiles = 0, badFiles = 0, okPacks = 0, badPacks = 0;
     for (const String &n : files) {
         if (!isThemeText(n)) continue;
         ThemeDef t;
-        if (parseThemeFile("/themes/" + n, t)) {
+        if (parseThemeFile(THEMES_DIR "/" + n, t)) {
             if (t.name.length() == 0) t.name = n.substring(0, n.lastIndexOf('.'));
             t.dir = "";
             v.push_back(t);
@@ -403,7 +407,7 @@ static std::vector<ThemeDef> themesAll(String *report = nullptr) {
     }
     for (const String &d : dirs) {
         ThemeDef t;
-        if (loadPack("/themes/" + d, d, t)) { v.push_back(t); okPacks++; }
+        if (loadPack(THEMES_DIR "/" + d, d, t)) { v.push_back(t); okPacks++; }
         else badPacks++;
     }
     if (report) {
@@ -417,11 +421,11 @@ static std::vector<ThemeDef> themesAll(String *report = nullptr) {
 
 bool themesSawEncryptedFiles() { return sSawEncrypted; }
 
-// Raw listing of /themes, two levels deep, so a failing pack can be diagnosed.
+// Raw listing of the theme folder, two levels deep, so a failing pack can be diagnosed.
 static String themesTree() {
-    String out = "/themes tree:\n";
+    String out = THEMES_DIR " tree:\n";
     if (!sdInit()) return out + "  (SD not mounted)\n";
-    if (!SD.exists("/themes")) return out + "  (folder does not exist)\n";
+    if (!SD.exists(THEMES_DIR)) return out + "  (folder does not exist)\n";
     // First bytes of a theme file, so we can tell "renamed" from "encrypted".
     auto peek = [](const String &path) {
         File f = SD.open(path);
@@ -435,22 +439,22 @@ static String themesTree() {
         return s;
     };
     std::vector<String> files, dirs;
-    listDir("/themes", files, dirs);
-    for (const String &f : files) out += "  F /themes/" + f + "\n";
+    listDir(THEMES_DIR, files, dirs);
+    for (const String &f : files) out += "  F " THEMES_DIR "/" + f + "\n";
     for (const String &d : dirs) {
-        out += "  D /themes/" + d + "/\n";
+        out += "  D " THEMES_DIR "/" + d + "/\n";
         std::vector<String> f2, d2;
-        listDir("/themes/" + d, f2, d2);
+        listDir(THEMES_DIR "/" + d, f2, d2);
         for (const String &f : f2) {
             out += "      F " + f + "\n";
             String low = f;
             low.toLowerCase();
-            if (low.startsWith("theme.txt")) out += peek("/themes/" + d + "/" + f) + "\n";
+            if (low.startsWith("theme.txt")) out += peek(THEMES_DIR "/" + d + "/" + f) + "\n";
         }
         for (const String &s : d2) {
             out += "      D " + s + "/\n";
             std::vector<String> f3, d3;
-            listDir("/themes/" + d + "/" + s, f3, d3);
+            listDir(THEMES_DIR "/" + d + "/" + s, f3, d3);
             for (const String &f : f3) out += "          F " + f + "\n";
             for (const String &t : d3) out += "          D " + t + "/\n";
         }
@@ -494,7 +498,7 @@ static void themesMenu() {
         } else {
             uiTextCenter("No themes found on the SD card", 44, 1, COL_FG);
             uiTextCenter(rep, 62, 1, COL_MUTED);
-            uiTextCenter("put them in  /themes  on the card", 84, 1, COL_MUTED);
+            uiTextCenter("put them in  " THEMES_DIR "  on the card", 84, 1, COL_MUTED);
             uiTextCenter("make one at", 100, 1, COL_MUTED);
             uiTextCenter("loznoc.github.io/dualboot/theme.html", 112, 1, gAccent);
         }

@@ -3,7 +3,8 @@
 #include "display.h"
 #include "input.h"
 #include "sdcard.h"
-#include "webpage_data.h" // kWebPageGz â€” see tools/make_webpage.py
+#include "settings.h"     // THEMES_DIR
+#include "webpage_data.h" // kWebPageGz - see tools/make_webpage.py
 #include <SD.h>
 #include <WebServer.h>
 #include <WiFi.h>
@@ -180,10 +181,10 @@ static void finishTheme() {
         server.send(500, "text/plain", s_status);
         return;
     }
-    if (!SD.exists("/themes")) SD.mkdir("/themes");
+    if (!SD.exists(THEMES_DIR)) SD.mkdir(THEMES_DIR);
     String err;
     int n = 0;
-    const bool ok = unzipTo(s_outPath, "/themes", err, n);
+    const bool ok = unzipTo(s_outPath, THEMES_DIR, err, n);
     SD.remove(s_outPath);
     if (!ok) {
         s_status = "Theme failed";

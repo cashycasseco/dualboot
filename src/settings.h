@@ -1,6 +1,10 @@
 #pragma once
 #include <Arduino.h>
 
+// Folder on the SD card holding this launcher's themes. Deliberately NOT "/themes": Bruce
+// already uses that name for its own themes, and the two formats are unrelated.
+#define THEMES_DIR "/catcolor"
+
 // Loads the saved theme (UI accent + LED colour) from NVS and applies it. Call once at
 // boot, before the first screen is drawn and after the LED strip is ready.
 void settingsLoad();
@@ -17,9 +21,9 @@ bool bootAnimEnabled();
 // The active theme pack's boot-frame folder, or "" if it has none (then /boot is used).
 String themeBootDir();
 
-// Human-readable dump of what the /themes scanner finds (serial console "themes" command).
+// Human-readable dump of what the theme scanner finds (serial console "themes" command).
 String themesScanReport();
 
-// True when the last scan saw Windows-encrypted ".PFILE"/"$EFS" entries in /themes — the files
-// are present but unreadable, which otherwise looks like "no themes found".
+// True when the last scan saw Windows-encrypted ".PFILE"/"$EFS" entries in the theme folder —
+// the files are present but unreadable, which otherwise looks like "no themes found".
 bool themesSawEncryptedFiles();

@@ -96,7 +96,7 @@ handy when the device is nowhere near your PC.
    the address to open (`http://192.168.4.1`).
 2. Join it from a phone or laptop and open that address.
 3. Upload a **firmware `.bin`** (saved to the card — install it with **Install**) or a **theme pack
-   `.zip`** straight from the theme creator (unpacked into `/themes` on the device).
+   `.zip`** straight from the theme creator (unpacked into `/catcolor` on the device).
 4. **BACK** shuts the hotspot down. It won't quit mid-upload.
 
 Theme zips are unpacked on-device. They must be *stored* (uncompressed) zips — which is exactly
@@ -117,19 +117,22 @@ Open the **[theme creator](https://loznoc.github.io/dualboot/theme.html)**, pick
 optionally replace any icons with your own images, optionally drop in a **GIF** for the boot
 animation, and download the pack. Everything runs in your browser — nothing is uploaded.
 
-Then unzip it into a **`/themes`** folder on the SD card (use **USB** drive mode so you don't have
-to take the card out) and pick it under **Settings → Design → Theme**. Colours, icons and the boot
-animation all switch over at once.
+Then unzip it into a **`/catcolor`** folder on the SD card (use **USB** drive mode so you don't
+have to take the card out) and pick it under **Settings → Design → Theme**. Colours, icons and the
+boot animation all switch over at once.
+
+> The folder is `/catcolor`, **not** `/themes` — Bruce already uses `/themes` for its own themes
+> and the two formats are unrelated, so they are kept apart.
 
 #### Theme format (if you'd rather write it yourself)
 
-A theme is either a single `.txt` file in `/themes`, or a **folder** — a "pack" — that can also
+A theme is either a single `.txt` file in `/catcolor`, or a **folder** — a "pack" — that can also
 carry icons and an animation:
 
 ```
-/themes/cyberpunk/theme.txt        colours (required)
-/themes/cyberpunk/icons.bin        custom icon set   (optional)
-/themes/cyberpunk/boot/*.raw       boot animation    (optional)
+/catcolor/cyberpunk/theme.txt      colours (required)
+/catcolor/cyberpunk/icons.bin      custom icon set   (optional)
+/catcolor/cyberpunk/boot/*.raw     boot animation    (optional)
 ```
 
 `theme.txt` is plain `key = value`, `#` starts a comment:
