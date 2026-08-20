@@ -23,9 +23,12 @@ bool appBoot(const esp_partition_t *part);
 typedef void (*InstallProgress)(uint32_t done, uint32_t total);
 
 // Install a firmware .bin from the SD card into the given OTA slot and remember `name`.
-// A standalone .bin carries its own bootloader+table (0x0..0x10000); only the app image
-// from 0x10000 is written. Does NOT change the boot slot.
-bool appInstallFromSd(const char *path, const esp_partition_t *slot, const String &name, InstallProgress cb);
+// Works with both layouts published in the wild: a full flash image (bootloader + partition
+// table + app at 0x10000) and a bare app image. The app is located by reading the ESP32 image
+// headers, so only the image itself is written — never trailing data. Does NOT change the boot
+// slot. On failure `err` (optional) receives a short reason to show the user.
+bool appInstallFromSd(const char *path, const esp_partition_t *slot, const String &name,
+                      InstallProgress cb, String *err = nullptr);
 
 // The label shown for a slot everywhere (home grid + delete): the stored name, or
 // "Empty" when the slot has no name/app. Keeps the menus consistent.

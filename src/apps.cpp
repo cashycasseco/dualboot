@@ -121,26 +121,91 @@ bool appDelete(const esp_partition_t *part) {
     return true;
 }
 
-bool appInstallFromSd(const char *path, const esp_partition_t *slot, const String &name, InstallProgress cb) {
-    if (!slot) return false;
-    File f = SD.open(path);
-    if (!f) return false;
+// ---- firmware image sniffing ------------------------------------------------------------------
+// A .bin can be either a FULL flash image (bootloader at 0, partition table at 0x8000, app at
+// 0x10000) or just the APP image on its own — plenty of projects publish the raw build output.
+// Assuming one or the other is why installs failed, so the layout is detected instead.
 
-    const size_t total = f.size();
-    if (total <= 0x10000) { // must contain a real app image past its own bootloader/table
-        f.close();
-        return false;
+static const uint16_t kChipEsp32S3 = 0x0009;
+
+// Exact length of the ESP32 image starting at `off`, or 0 if there isn't one there. Walking the
+// segment table also means we write only the image, never trailing data from a merged file.
+static size_t espImageLen(File &f, size_t off, size_t total, uint16_t &chip) {
+    uint8_t h[24];
+    if (off + sizeof(h) > total || !f.seek(off) || f.read(h, sizeof(h)) != (int)sizeof(h)) return 0;
+    if (h[0] != 0xE9) return 0;
+    const uint8_t segs = h[1];
+    if (segs == 0 || segs > 16) return 0;
+    chip = (uint16_t)h[12] | ((uint16_t)h[13] << 8);
+    const bool hashed = h[23] == 1;
+
+    size_t pos = sizeof(h);
+    for (uint8_t i = 0; i < segs; ++i) {
+        uint8_t s[8];
+        if (!f.seek(off + pos) || f.read(s, sizeof(s)) != (int)sizeof(s)) return 0;
+        const uint32_t len = (uint32_t)s[4] | ((uint32_t)s[5] << 8) | ((uint32_t)s[6] << 16) |
+                             ((uint32_t)s[7] << 24);
+        if (len > 16u * 1024 * 1024) return 0; // nonsense length: not really an image
+        pos += 8 + len;
+        if (off + pos > total) return 0;
     }
-    const size_t appSize = total - 0x10000;
-    if (appSize > slot->size || !f.seek(0x10000)) {
-        f.close();
+    pos = ((pos + 16) & ~(size_t)15); // 1-byte checksum, padded to a 16-byte boundary
+    if (hashed) pos += 32;            // appended SHA-256
+    return (off + pos <= total) ? pos : 0;
+}
+
+bool appInstallFromSd(const char *path, const esp_partition_t *slot, const String &name,
+                      InstallProgress cb, String *err) {
+    auto fail = [&](const String &m) {
+        if (err) *err = m;
         return false;
+    };
+    if (!slot) return fail("No slot");
+    File f = SD.open(path);
+    if (!f) return fail("Cannot open file");
+    const size_t total = f.size();
+
+    // 0x10000 first: a full flash image ALSO has a valid image at 0 (its bootloader), and
+    // installing that instead of the app would produce a slot that never boots.
+    const size_t candidates[] = {0x10000, 0, 0x20000};
+    size_t appOff = 0, appSize = 0;
+    uint16_t chip = 0;
+    for (size_t c : candidates) {
+        uint16_t ch = 0;
+        const size_t len = espImageLen(f, c, total, ch);
+        if (len) {
+            appOff = c;
+            appSize = len;
+            chip = ch;
+            break;
+        }
+    }
+    if (!appSize) {
+        f.close();
+        return fail("Not an ESP32 firmware");
+    }
+    if (chip != kChipEsp32S3) {
+        f.close();
+        char b[48];
+        snprintf(b, sizeof(b), "Wrong chip (id 0x%04X)", chip);
+        return fail(b);
+    }
+    if (appSize > slot->size) {
+        f.close();
+        char b[56];
+        snprintf(b, sizeof(b), "Too big: %u KB, slot %u KB", (unsigned)(appSize / 1024),
+                 (unsigned)(slot->size / 1024));
+        return fail(b);
+    }
+    if (!f.seek(appOff)) {
+        f.close();
+        return fail("Cannot read file");
     }
 
     esp_ota_handle_t h;
     if (esp_ota_begin(slot, appSize, &h) != ESP_OK) { // erases the slot, then streams in
         f.close();
-        return false;
+        return fail("Cannot erase slot");
     }
 
     static uint8_t buf[4096];
@@ -169,11 +234,11 @@ bool appInstallFromSd(const char *path, const esp_partition_t *slot, const Strin
     if (!ok) {
         esp_ota_abort(h);
         appClearName(slot->label);
-        return false;
+        return fail("Read/write error");
     }
     if (esp_ota_end(h) != ESP_OK) { // image failed validation; the slot is unusable
         appClearName(slot->label);
-        return false;
+        return fail("Image rejected (corrupt?)");
     }
     appSetName(slot->label, name);
     return true;

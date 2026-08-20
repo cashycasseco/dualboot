@@ -124,14 +124,24 @@ static void installFromSdMenu() {
         g_lastDraw = 0;
         g_catT0 = millis();
         uiInstallScreen(name, 0, 0);
-        const bool ok = appInstallFromSd(("/" + file).c_str(), slots[ssel].part, name, drawInstallProgress);
+        String err;
+        const bool ok =
+            appInstallFromSd(("/" + file).c_str(), slots[ssel].part, name, drawInstallProgress, &err);
         if (ok) {
             uiMessage(name + " installed", COL_OK);
             delay(1200);
             pickSlotIcon(slots[ssel], name); // offer an icon while we are here; BACK keeps the default
         } else {
-            uiError("Install failed");
-            delay(1800);
+            // Say WHY. "Install failed" alone leaves people with nothing to act on.
+            uiBackground();
+            uiTitleBar("INSTALL FAILED");
+            uiTextCenter(file, 40, 1, COL_MUTED);
+            uiTextCenter(err.length() ? err : String("Unknown error"), 60, 2, COL_ERR);
+            uiTextCenter("The slot is now empty.", 88, 1, COL_MUTED);
+            uiTextCenter("press = back", scrH() - 12, 1, gAccent);
+            uiFlush();
+            inputDrain();
+            while (inputPoll() == EV_NONE) delay(30);
         }
         return;
     }
