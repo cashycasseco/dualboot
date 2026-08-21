@@ -5,6 +5,8 @@
 #include "sdcard.h"
 #include "settings.h"     // THEMES_DIR
 #include "webpage_data.h" // kWebPageGz - see tools/make_webpage.py
+#include <ESPmDNS.h>
+#include <Preferences.h>
 #include <SD.h>
 #include <WebServer.h>
 #include <WiFi.h>
@@ -15,8 +17,21 @@
 // the card (never buffered whole in RAM), so a 4 MB .bin is fine.
 // ---------------------------------------------------------------------------------------------
 
-static const char *AP_PASS = "dualboot"; // WPA2 needs >= 8 characters
+// Two ways onto the device, in order of preference:
+//
+//   STA - it joins a network you already use. The phone never has to leave your Wi-Fi, which
+//         is the only way a remote feels instant: after a reboot the launcher is back on the
+//         same address within a couple of seconds and the app just finds it again.
+//   AP  - its own hotspot, for when there is no network to join (or none saved yet). Always
+//         available as a fallback, and the only way to enter the credentials in the first
+//         place.
+//
+// Either way it answers to `tembed.local` over mDNS.
+
+static const char *AP_PASS = "dualboot";  // WPA2 needs >= 8 characters
+static const char *MDNS_NAME = "tembed";  // -> http://tembed.local
 static WebServer server(80);
+static bool s_running = false; // AP + server are up (possibly while the normal UI is on screen)
 
 static String s_ssid;
 static String s_status = "Waiting for uploads";
@@ -27,6 +42,33 @@ static bool s_busy = false;   // an upload is in flight
 static File s_out;            // destination while streaming
 static String s_outPath;
 static bool s_outOk = false;
+
+static String s_staSsid, s_staPass; // saved home network
+static bool s_autoStart = false;    // bring Wi-Fi up on every boot
+static bool s_apMode = true;        // true = own hotspot, false = joined s_staSsid
+static bool s_mdns = false;
+static String s_ip;
+static volatile bool s_netRestart = false; // set by POST /net, acted on outside the handler
+
+static void restartNet(); // defined with the rest of the network setup, used by the poll hook
+
+static void netLoad() {
+    Preferences p;
+    p.begin("dblnet", true);
+    s_staSsid = p.getString("ssid", "");
+    s_staPass = p.getString("pass", "");
+    s_autoStart = p.getBool("auto", false);
+    p.end();
+}
+
+static void netSave() {
+    Preferences p;
+    p.begin("dblnet", false);
+    p.putString("ssid", s_staSsid);
+    p.putString("pass", s_staPass);
+    p.putBool("auto", s_autoStart);
+    p.end();
+}
 
 // ---- helpers ---------------------------------------------------------------------------------
 static String sanitize(const String &nameIn) {
@@ -199,27 +241,88 @@ static void finishTheme() {
 }
 
 
+// ---- screen mirror + remote --------------------------------------------------------------------
+// The framebuffer is sent as raw RGB565 in screen order, streamed row by row so nothing large is
+// ever buffered. `s` thins it (s=2 -> quarter the bytes), which is what makes it feel live over
+// the device's own access point.
+static void handleFrame() {
+    const int s = constrain(server.hasArg("s") ? server.arg("s").toInt() : 2, 1, 4);
+    const int w = scrW() / s, h = scrH() / s;
+    static uint16_t row[320];
+    if (uiScreenRow(0, s, row, (int)(sizeof(row) / sizeof(row[0]))) == 0) {
+        server.send(503, "text/plain", "no framebuffer");
+        return;
+    }
+    server.sendHeader("X-Width", String(w));
+    server.sendHeader("X-Height", String(h));
+    server.sendHeader("Cache-Control", "no-store");
+    server.setContentLength((size_t)w * h * 2);
+    server.send(200, "application/octet-stream", "");
+    WiFiClient c = server.client();
+    for (int y = 0; y < h; ++y) {
+        const int n = uiScreenRow(y * s, s, row, w);
+        if (n <= 0) break;
+        c.write((const uint8_t *)row, (size_t)n * 2);
+    }
+}
+
+// Remote control: the same four events the wheel and buttons produce.
+static void handleKey() {
+    const String k = server.arg("k");
+    if (k == "left") inputInject(EV_LEFT);
+    else if (k == "right") inputInject(EV_RIGHT);
+    else if (k == "ok") inputInject(EV_PRESS);
+    else if (k == "back") inputInject(EV_BACK);
+    else {
+        server.send(400, "text/plain", "unknown key");
+        return;
+    }
+    server.send(200, "text/plain", "ok");
+}
+
 // ---- screen ------------------------------------------------------------------------------------
 static void drawPortal() {
     uiBackground();
-    uiTitleBar("WIFI UPLOAD");
+    uiTitleBar(s_apMode ? "WIFI HOTSPOT" : "WIFI");
     gfx->setTextSize(1);
-    gfx->setTextColor(COL_FG, COL_BG);
-    gfx->setCursor(10, 30);
-    gfx->print("1. Join this Wi-Fi:");
-    gfx->setTextColor(gAccent, COL_BG);
-    gfx->setCursor(20, 44);
-    gfx->print(s_ssid.c_str());
-    gfx->setCursor(20, 56);
-    gfx->print("pass: ");
-    gfx->print(AP_PASS);
-    gfx->setTextColor(COL_FG, COL_BG);
-    gfx->setCursor(10, 72);
-    gfx->print("2. Open in a browser:");
+
+    if (s_apMode) {
+        gfx->setTextColor(COL_FG, COL_BG);
+        gfx->setCursor(10, 30);
+        gfx->print("1. Join this Wi-Fi:");
+        gfx->setTextColor(gAccent, COL_BG);
+        gfx->setCursor(20, 44);
+        gfx->print(s_ssid.c_str());
+        gfx->setCursor(20, 56);
+        gfx->print("pass: ");
+        gfx->print(AP_PASS);
+        gfx->setTextColor(COL_FG, COL_BG);
+        gfx->setCursor(10, 72);
+        gfx->print("2. Open in a browser:");
+    } else {
+        gfx->setTextColor(COL_FG, COL_BG);
+        gfx->setCursor(10, 30);
+        gfx->print("Joined your network:");
+        gfx->setTextColor(gAccent, COL_BG);
+        gfx->setCursor(20, 44);
+        gfx->print(s_ssid.c_str());
+        gfx->setTextColor(COL_MUTED, COL_BG);
+        gfx->setCursor(20, 58);
+        gfx->print("Your phone can stay on it.");
+        gfx->setTextColor(COL_FG, COL_BG);
+        gfx->setCursor(10, 72);
+        gfx->print("Reach it at:");
+    }
     gfx->setTextColor(gAccent, COL_BG);
     gfx->setCursor(20, 86);
     gfx->print("http://");
-    gfx->print(WiFi.softAPIP().toString().c_str());
+    gfx->print(s_ip.c_str());
+    if (s_mdns) {
+        gfx->setTextColor(COL_MUTED, COL_BG);
+        gfx->print("  /  ");
+        gfx->print(MDNS_NAME);
+        gfx->print(".local");
+    }
 
     // status / progress
     gfx->setTextColor(COL_MUTED, COL_BG);
@@ -232,13 +335,201 @@ static void drawPortal() {
         gfx->setTextColor(gAccent, COL_BG);
         gfx->print(b);
     }
-    const int clients = WiFi.softAPgetStationNum();
-    gfx->setTextColor(clients ? gAccent : COL_MUTED, COL_BG);
-    gfx->setCursor(scrW() - 74, 108);
-    gfx->print(clients ? "connected" : "no client");
+    if (s_apMode) {
+        const int clients = WiFi.softAPgetStationNum();
+        gfx->setTextColor(clients ? gAccent : COL_MUTED, COL_BG);
+        gfx->setCursor(scrW() - 74, 108);
+        gfx->print(clients ? "connected" : "no client");
+    } else {
+        gfx->setTextColor(WiFi.status() == WL_CONNECTED ? gAccent : COL_ERR, COL_BG);
+        gfx->setCursor(scrW() - 74, 108);
+        gfx->print(WiFi.status() == WL_CONNECTED ? "online" : "dropped");
+    }
 
-    uiTextCenter("press BACK to stop the hotspot", scrH() - 12, 1, uiDim(gAccent, 85));
+    uiTextCenter("back = menu   (wi-fi stays on)", scrH() - 24, 1, uiDim(gAccent, 85));
+    uiTextCenter("press = turn wi-fi off", scrH() - 12, 1, COL_MUTED);
     uiFlush();
+}
+
+// ---- lifecycle ----------------------------------------------------------------------------------
+bool webPortalRunning() { return s_running; }
+
+// Called from the UI's idle hooks. Kept trivial so it can sit in every menu loop.
+void webPortalPoll() {
+    if (!s_running) return;
+    server.handleClient();
+    if (s_netRestart) restartNet();
+}
+
+void webPortalStop() {
+    if (!s_running) return;
+    server.stop();
+    if (s_mdns) {
+        MDNS.end();
+        s_mdns = false;
+    }
+    WiFi.softAPdisconnect(true);
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
+    s_running = false;
+    sdRemount(); // pick up whatever was uploaded
+}
+
+// The same four events again, under the name Bruce's WebUI uses. Costs almost nothing and
+// means one remote client can drive the launcher and Bruce through the same call.
+static void handleCm() {
+    const String c = server.arg("cmnd");
+    if (!c.startsWith("nav")) {
+        server.send(400, "text/plain", "unknown command");
+        return;
+    }
+    if (c.indexOf("prev") > 0 || c.indexOf("up") > 0) inputInject(EV_LEFT);
+    else if (c.indexOf("next") > 0 || c.indexOf("down") > 0) inputInject(EV_RIGHT);
+    else if (c.indexOf("sel") > 0) inputInject(EV_PRESS);
+    else if (c.indexOf("esc") > 0) inputInject(EV_BACK);
+    else {
+        server.send(400, "text/plain", "unknown nav");
+        return;
+    }
+    server.send(200, "text/plain", "ok");
+}
+
+static void handleNetGet() {
+    String j = "{\"mode\":\"";
+    j += s_apMode ? "ap" : "sta";
+    j += "\",\"ssid\":\"" + s_ssid + "\",\"ip\":\"" + s_ip + "\",\"home\":\"" + s_staSsid +
+         "\",\"auto\":" + (s_autoStart ? "true" : "false") + "}";
+    server.sendHeader("Cache-Control", "no-store");
+    server.send(200, "application/json", j);
+}
+
+// Saving credentials cannot reconnect inline: the reply has to go out over the very radio we
+// are about to drop. Flag it and let the portal loop do the switch.
+static void handleNetPost() {
+    if (server.hasArg("ssid")) s_staSsid = server.arg("ssid");
+    if (server.hasArg("pass")) s_staPass = server.arg("pass");
+    if (server.hasArg("auto")) s_autoStart = server.arg("auto") == "1";
+    netSave();
+    const bool reconnect = server.hasArg("apply") && s_staSsid.length();
+    server.send(200, "text/plain",
+                reconnect ? "Saved. Joining " + s_staSsid + " - reconnect to that network."
+                          : "Saved.");
+    if (reconnect) s_netRestart = true;
+}
+
+static void installRoutes() {
+    static bool done = false;
+    if (done) return;
+    done = true;
+    server.on("/", HTTP_GET, []() { // stored gzipped; every browser unpacks it for us
+        server.sendHeader("Content-Encoding", "gzip");
+        server.send_P(200, "text/html", (const char *)kWebPageGz, sizeof(kWebPageGz));
+    });
+    server.on("/fb", HTTP_GET, handleFrame);
+    server.on("/key", HTTP_GET, handleKey);
+    server.on("/cm", HTTP_POST, handleCm);
+    server.on("/cm", HTTP_GET, handleCm);
+    server.on("/net", HTTP_GET, handleNetGet);
+    server.on("/net", HTTP_POST, handleNetPost);
+    server.on("/bin", HTTP_POST, finishBin, handleUploadData);
+    server.on("/theme", HTTP_POST, finishTheme, handleUploadData);
+    server.onNotFound([]() { server.sendHeader("Location", "/"); server.send(302, "text/plain", ""); });
+}
+
+static void startMdns() {
+    if (s_mdns) return;
+    if (MDNS.begin(MDNS_NAME)) {
+        MDNS.addService("http", "tcp", 80);
+        s_mdns = true;
+    }
+}
+
+// Join the saved network. Reports progress on screen because nine seconds of a blank panel
+// looks like a hang.
+static bool startSta() {
+    if (!s_staSsid.length()) return false;
+    WiFi.mode(WIFI_STA);
+    // Modem sleep parks the radio between beacons and adds up to ~100 ms to every request.
+    // For a screen mirror that is the difference between "live" and "laggy".
+    WiFi.setSleep(false);
+    WiFi.begin(s_staSsid.c_str(), s_staPass.c_str());
+
+    const uint32_t t0 = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - t0 < 9000) {
+        uiMessage("Joining " + s_staSsid + " ...", COL_MUTED);
+        delay(250);
+    }
+    if (WiFi.status() != WL_CONNECTED) {
+        WiFi.disconnect(true);
+        return false;
+    }
+    s_apMode = false;
+    s_ssid = s_staSsid;
+    s_ip = WiFi.localIP().toString();
+    return true;
+}
+
+static bool startApOnly() {
+    uint8_t mac[6];
+    WiFi.softAPmacAddress(mac);
+    char ssid[32];
+    snprintf(ssid, sizeof(ssid), "T-Embed-%02X%02X", mac[4], mac[5]);
+
+    WiFi.mode(WIFI_AP);
+    WiFi.setSleep(false);
+    if (!WiFi.softAP(ssid, AP_PASS)) {
+        WiFi.mode(WIFI_OFF);
+        return false;
+    }
+    s_apMode = true;
+    s_ssid = ssid;
+    s_ip = WiFi.softAPIP().toString();
+    return true;
+}
+
+static bool startNet() {
+    if (s_running) return true;
+    netLoad();
+    s_status = "Waiting";
+    s_uploaded = 0;
+    s_busy = false;
+    s_dirty = true;
+
+    if (!startSta() && !startApOnly()) return false;
+    installRoutes();
+    startMdns();
+    server.begin();
+    s_running = true;
+    return true;
+}
+
+// Drop the radio and bring it back up with whatever is saved now.
+static void restartNet() {
+    s_netRestart = false;
+    if (s_running) {
+        server.stop();
+        if (s_mdns) { MDNS.end(); s_mdns = false; }
+        WiFi.softAPdisconnect(true);
+        WiFi.disconnect(true);
+        WiFi.mode(WIFI_OFF);
+        s_running = false;
+    }
+    delay(200);
+    startNet();
+}
+
+// Called once at boot. Only does anything if the user ticked "start at boot" in the portal —
+// then the launcher is reachable the moment it comes up, which is what makes hopping between
+// firmwares survivable from the phone.
+void webPortalAutoStart() {
+    netLoad();
+    if (!s_autoStart) return;
+    startNet();
+}
+
+bool webPortalAutoEnabled() {
+    netLoad();
+    return s_autoStart;
 }
 
 // ---- entry -------------------------------------------------------------------------------------
@@ -248,38 +539,34 @@ void webPortalEnter() {
         delay(1800);
         return;
     }
-    uint8_t mac[6];
-    WiFi.softAPmacAddress(mac);
-    char ssid[32];
-    snprintf(ssid, sizeof(ssid), "T-Embed-%02X%02X", mac[4], mac[5]);
-    s_ssid = ssid;
-    s_status = "Waiting for uploads";
-    s_uploaded = 0;
-    s_busy = false;
-    s_dirty = true;
-
-    WiFi.mode(WIFI_AP);
-    if (!WiFi.softAP(ssid, AP_PASS)) {
+    if (!startNet()) {
         uiError("Could not start Wi-Fi");
         delay(1800);
-        WiFi.mode(WIFI_OFF);
         return;
     }
-
-    server.on("/", HTTP_GET, []() { // stored gzipped; every browser unpacks it for us
-        server.sendHeader("Content-Encoding", "gzip");
-        server.send_P(200, "text/html", (const char *)kWebPageGz, sizeof(kWebPageGz));
-    });
-    server.on("/bin", HTTP_POST, finishBin, handleUploadData);
-    server.on("/theme", HTTP_POST, finishTheme, handleUploadData);
-    server.onNotFound([]() { server.sendHeader("Location", "/"); server.send(302, "text/plain", ""); });
-    server.begin();
 
     inputDrain();
     uint32_t lastDraw = 0;
     for (;;) {
         server.handleClient();
-        if (!s_busy && inputPoll() == EV_BACK) break; // never cut an upload short
+        if (s_netRestart) {
+            restartNet();
+            s_dirty = true;
+        }
+        if (!s_busy) {                        // never react while an upload is in flight
+            const InputEvent e = inputPoll();
+            // BACK is what everyone presses to leave a screen, so it must NOT tear the hotspot
+            // down — it just hands the screen back while the server keeps serving. Stopping is
+            // the deliberate action: come back here and press.
+            if (e == EV_BACK) {
+                inputDrain();
+                return;
+            }
+            if (e == EV_PRESS) {
+                webPortalStop();
+                break;
+            }
+        }
         const uint32_t now = millis();
         if (s_dirty && now - lastDraw > 250) { // throttled: redrawing starves the server
             s_dirty = false;
@@ -291,10 +578,7 @@ void webPortalEnter() {
         }
         delay(2);
     }
-
-    server.stop();
-    WiFi.softAPdisconnect(true);
-    WiFi.mode(WIFI_OFF);
-    sdRemount(); // pick up whatever was just written
+    uiMessage("Hotspot off", COL_MUTED);
+    delay(700);
     inputDrain();
 }

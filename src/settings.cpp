@@ -6,6 +6,7 @@
 #include "led.h"
 #include "sdcard.h"
 #include "serial_console.h"
+#include "webportal.h"
 #include <Preferences.h>
 #include <SD.h>
 #include <algorithm>
@@ -42,6 +43,13 @@ static bool bootAnimOn = true;       // play the boot animation at startup
 static String sThemeDir;             // active theme-pack folder ("" = none/built-in)
 
 bool bootAnimEnabled() { return bootAnimOn; }
+
+// Idle work for the settings menus, matching main.cpp: keep the serial console and the web
+// portal (screen mirror + remote) alive while these screens are open.
+static void settingsIdle() {
+    serialConsolePoll();
+    webPortalPoll();
+}
 
 // The active theme pack's boot-frame folder, or "" when it has none. bootanim.cpp prefers
 // this over the generic /boot folder, so a pack can ship its own startup animation.
@@ -519,7 +527,7 @@ static void themesMenu() {
         tiles.push_back({t.name, active ? IC_CHECK : IC_NONE, 0, t.accent});
     }
     tiles.push_back({"Back", IC_BACK, 0, 0});
-    int sel = uiCarousel(tiles, "THEME", true, serialConsolePoll);
+    int sel = uiCarousel(tiles, "THEME", true, settingsIdle);
     if (sel < 0 || sel >= (int)themes.size()) return;
     const ThemeDef &t = themes[sel];
     sAccent = t.accent;
@@ -598,7 +606,7 @@ void appearanceMenu() {
             {"Theme", IC_THEME, 0},      {"Color", IC_COLOR, 0}, {"LED Color", IC_LEDCOLOR, 0},
             {"Bright", IC_LEDBRIGHT, 0}, {"Boot", IC_ANIM, 0},   {"Back", IC_BACK, 0},
         };
-        int sel = uiGrid("DESIGN", tiles, serialConsolePoll);
+        int sel = uiGrid("DESIGN", tiles, settingsIdle);
         if (sel < 0 || sel == 5) return;
         switch (sel) {
             case 0: themesMenu(); break;

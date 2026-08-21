@@ -24,7 +24,26 @@ void inputInit() {
     lastPos = encoder->getPosition();
 }
 
+// Small queue for events pushed in from elsewhere (the web remote). Written from the web
+// server's handler and read from the UI loop — both run on the main task, so a plain ring is
+// enough; `volatile` only guards against the compiler caching the indices.
+static constexpr int kInjectMax = 8;
+static volatile InputEvent injected[kInjectMax];
+static volatile uint8_t injHead = 0, injTail = 0;
+
+void inputInject(InputEvent e) {
+    const uint8_t next = (uint8_t)((injHead + 1) % kInjectMax);
+    if (next == injTail) return; // full: drop rather than block the web request
+    injected[injHead] = e;
+    injHead = next;
+}
+
 InputEvent inputPoll() {
+    if (injTail != injHead) { // remote events first, so they never sit behind idle polling
+        const InputEvent e = injected[injTail];
+        injTail = (uint8_t)((injTail + 1) % kInjectMax);
+        return e;
+    }
     // Buttons are checked BEFORE the wheel so a press/back can never be starved by wheel
     // events — spurious encoder ticks (e.g. during USB drive mode) used to make BACK do
     // nothing because the wheel branch returned first on every call.
@@ -66,4 +85,5 @@ InputEvent inputPoll() {
 void inputDrain() {
     if (encoder) lastPos = encoder->getPosition();
     selHeld = bkHeld = false;
+    injTail = injHead; // a new screen starts clean, remote presses included
 }

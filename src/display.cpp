@@ -4,6 +4,7 @@
 #include "cyberfont.h"
 #include "icons_data.h"
 #include "input.h"
+#include "webportal.h" // webPortalRunning() — status-bar hotspot indicator
 #include <SD.h>
 #include <math.h>
 
@@ -24,6 +25,24 @@ uint16_t gAccent = COL_ACCENT;
 void uiFlush() { canvas->flush(); }
 int scrW() { return gfx->width(); }
 int scrH() { return gfx->height(); }
+
+// The canvas keeps its framebuffer in the panel's native orientation (170 wide x 320 tall) and
+// applies BOARD_ROTATION while drawing. Arduino_Canvas::writePixelPreclipped() for rotation 3
+// maps screen (x,y) to fb[(_max_x - x) * _height + y], i.e. stride = scrH(). Undo exactly that
+// here so nothing else in the firmware has to know about the layout.
+int uiScreenRow(int y, int step, uint16_t *dst, int dstCapacity) {
+    const uint16_t *fb = canvas->getFramebuffer();
+    if (!fb || !dst || y < 0 || y >= scrH()) return 0;
+    if (step < 1) step = 1;
+#if BOARD_ROTATION != 3
+#error "uiScreenRow() assumes rotation 3; update the mapping if the panel rotation changes"
+#endif
+    const int maxX = scrW() - 1, stride = scrH();
+    int n = 0;
+    for (int x = 0; x < scrW() && n < dstCapacity; x += step)
+        dst[n++] = fb[(int32_t)(maxX - x) * stride + y];
+    return n;
+}
 
 static const int SB = 17;             // status-bar height
 static const uint16_t COL_INK_HI = 0xFFFF; // titles
@@ -100,6 +119,10 @@ void uiStatusBar() {
         cyDrawTop(gfx, CY_S, bx + bw + 8, by - 1, buf, COL_INK_HI, 1);
         if (chg) // clear charging bolt to the right of the percentage
             uiIconMask(IC_FLASH, bx + bw + 8 + cyTextW(CY_S, buf, 1) + 11, by + bh / 2, 16, gAccent);
+    }
+    // The hotspot can stay up while you use the menus, so say so — otherwise it is invisible.
+    if (webPortalRunning()) {
+        uiIconMask(IC_WIFI, scrW() - 14, by + bh / 2, 16, gAccent);
     }
     // thin accent divider under the bar
     gfx->drawFastHLine(0, SB, scrW(), uiDim(gAccent, 40));

@@ -79,3 +79,10 @@ int  uiCatDelayMs(int catId);
 void uiVBar(int x, int y, int w, int h, int pct, uint16_t fill, uint16_t track); // vertical bar
 void uiInstallScreen(const String &name, int pct, int catFrame); // cat + vertical progress
 void uiUsbScreen(int catFrame); // USB drive mode: cat + "copy files, press back"
+
+// --- screen mirroring -------------------------------------------------------------------------
+// Copies one row of the *visible* screen (row `y`, 0..scrH()-1) into `dst`, taking every
+// `step`-th pixel. The canvas framebuffer is stored in the panel's native orientation, so the
+// rotation is undone here — callers get plain left-to-right screen pixels. Returns how many
+// pixels were written, or 0 if there is no framebuffer.
+int uiScreenRow(int y, int step, uint16_t *dst, int dstCapacity);

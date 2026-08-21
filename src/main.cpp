@@ -25,6 +25,13 @@
 // paths overrun (stack-canary panic on boot). 16 KB gives comfortable headroom.
 SET_LOOP_TASK_STACK_SIZE(16 * 1024);
 
+// Idle work for every menu: the serial console plus the web portal, so screen mirroring and the
+// web remote keep working while you navigate the UI normally.
+static void uiIdle() {
+    serialConsolePoll();
+    webPortalPoll();
+}
+
 static String g_installName;
 static int g_lastPct = -1;
 static uint32_t g_catT0 = 0, g_lastDraw = 0;
@@ -238,7 +245,7 @@ static void settingsGrid() {
             {"PIN", IC_PIN, 0},       {"About", IC_ABOUT, 0}, {"Power", IC_OFF, 0},
             {"Back", IC_BACK, 0},
         };
-        int sel = uiGrid("SETTINGS", tiles, serialConsolePoll);
+        int sel = uiGrid("SETTINGS", tiles, uiIdle);
         if (sel < 0 || sel == 6) return;
         switch (sel) {
             case 0: appearanceMenu(); break;
@@ -268,7 +275,7 @@ static void mainMenu() {
         tiles.push_back({"WiFi", IC_WIFI, 0});
         tiles.push_back({"Settings", IC_SETTINGS, 0});
 
-        int sel = uiGrid(LAUNCHER_NAME, tiles, serialConsolePoll);
+        int sel = uiGrid(LAUNCHER_NAME, tiles, uiIdle);
         if (sel < 0) continue;
 
         if (sel < nSlots) {
@@ -302,6 +309,11 @@ void setup() {
         uiError("Locked");
         for (;;) delay(1000);
     }
+
+    // Only after the PIN: the web portal mirrors the screen and injects input, so bringing it
+    // up any earlier would hand the lock screen to whoever is on the network.
+    webPortalAutoStart();
+
     mainMenu(); // never returns
 }
 

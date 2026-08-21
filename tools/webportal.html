@@ -1,0 +1,312 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark"><title>T-EMBED CONSOLE</title>
+<!-- Silkscreen by Jason Kottke, SIL Open Font License 1.1 (tools/OFL.txt). Subset to ASCII. -->
+<style>
+@font-face{font-family:PX;font-style:normal;font-weight:400;font-display:block;
+ src:url(data:font/woff2;base64,@FONT@) format("woff2")}
+:root{
+ --void:#05070c;--panel:#0b1020;--well:#03050a;--line:#1b2c46;
+ --ink:#d9e6f2;--dim:#7f92ad;--faint:#4a5b78;
+ --grn:#3dfaa0;--cyn:#22d3ee;--mag:#ff3d81;
+ --px:PX,ui-monospace,monospace;
+ --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Courier New",monospace}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--void);color:var(--ink);overflow-x:hidden;
+ font:13px/1.6 var(--mono);letter-spacing:.2px}
+/* raster over the whole console, the way a phosphor tube lays down lines */
+body::after{content:"";position:fixed;inset:0;z-index:99;pointer-events:none;
+ background:repeating-linear-gradient(180deg,rgba(0,0,0,.11) 0 1px,transparent 1px 3px)}
+
+/* ---- status line ------------------------------------------------------------------- */
+.bar{position:sticky;top:0;z-index:60;background:rgba(5,7,12,.95);
+ border-bottom:1px solid var(--line);padding:9px 14px}
+.bar .in{max-width:460px;margin:0 auto;display:flex;align-items:center;gap:7px;
+ font-size:10px;letter-spacing:1.2px;color:var(--faint)}
+.bar b{font:400 11px/1 var(--px);letter-spacing:1px;color:var(--ink)}
+.bar .ip{color:var(--cyn)}
+.bar .lk{margin-left:auto;display:flex;align-items:center;gap:6px;color:var(--grn)}
+.dot{width:6px;height:6px;background:var(--grn);flex:0 0 auto}
+.dot.off{background:var(--mag)}
+.wrap{max-width:460px;margin:0 auto;padding:16px 14px 28px}
+
+/* ---- section rule ------------------------------------------------------------------ */
+.h{display:flex;align-items:center;gap:9px;margin:24px 0 9px}
+.h:first-child{margin-top:0}
+.h .g{width:3px;height:13px;background:var(--grn);flex:0 0 auto}
+.h span{font:400 12px/1 var(--px);letter-spacing:1.6px;color:var(--grn);white-space:nowrap}
+.h .r{flex:1;height:1px;background:var(--line)}
+.h em{font:400 9px/1 var(--px);font-style:normal;letter-spacing:1px;color:var(--faint);white-space:nowrap}
+
+/* ---- panel, cornered like a technical drawing -------------------------------------- */
+.p{position:relative;border:1px solid var(--line);background:var(--panel);padding:14px}
+.p::before,.p::after{content:"";position:absolute;width:7px;height:7px;border:1px solid var(--grn)}
+.p::before{top:-1px;left:-1px;border-right:0;border-bottom:0}
+.p::after{right:-1px;bottom:-1px;border-left:0;border-top:0}
+.note{color:var(--dim);font-size:11px;line-height:1.65;margin:0 0 11px}
+.note b{color:var(--ink);font-weight:400}
+
+/* ---- the tube ---------------------------------------------------------------------- */
+.crt{position:relative;background:#000;border:1px solid var(--line);overflow:hidden}
+#scr{display:block;width:100%;height:auto;background:#000;image-rendering:pixelated}
+.crt::after{content:"";position:absolute;inset:0;pointer-events:none;
+ background:repeating-linear-gradient(180deg,rgba(0,0,0,.30) 0 1px,transparent 1px 3px),
+ radial-gradient(125% 85% at 50% 50%,transparent 52%,rgba(0,0,0,.6))}
+.ns{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+ pointer-events:none;font:400 11px/1 var(--px);letter-spacing:2px;color:#2c3c58}
+.rd{display:flex;flex-wrap:wrap;gap:0 15px;margin-top:9px;
+ font-size:10px;letter-spacing:.7px;color:var(--faint)}
+.rd b{color:var(--cyn);font-weight:400}
+.lab{font:400 9px/1 var(--px);letter-spacing:1.2px;color:var(--faint);margin:14px 0 6px}
+.seg{display:flex;border:1px solid var(--line)}
+.seg button{flex:1;margin:0;-webkit-appearance:none;background:transparent;color:var(--dim);
+ border:0;border-left:1px solid var(--line);cursor:pointer;padding:10px 0;
+ font:400 10px/1 var(--px);letter-spacing:1.4px}
+.seg button:first-child{border-left:0}
+.seg button.on{background:var(--grn);color:#04121a}
+
+/* ---- keys: they travel when pressed, like the hardware ----------------------------- */
+.pad{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
+.k{margin:0;-webkit-appearance:none;cursor:pointer;user-select:none;
+ background:#0d1526;color:var(--ink);border:1px solid var(--line);box-shadow:3px 3px 0 #111c31;
+ font:400 13px/1 var(--px);letter-spacing:1.2px;padding:16px 0}
+/* arrows drawn, not typed - a font glyph would be the one soft edge on the page */
+.k.ar{line-height:0}
+.k.ar i{display:inline-block;width:0;height:0;border:8px solid transparent;vertical-align:middle}
+.k.l i{border-right-color:currentColor;transform:translateX(-4px)}
+.k.r i{border-left-color:currentColor;transform:translateX(4px)}
+.k.mid{color:var(--grn)}
+.k.wide{grid-column:1/4;padding:14px 0;font-size:11px}
+.k:active{transform:translate(3px,3px);box-shadow:none;
+ background:var(--grn);border-color:var(--grn);color:#04121a}
+.kh{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin:7px 0 14px;
+ font-size:9px;letter-spacing:.9px;color:var(--faint);text-align:center}
+.kh.one{grid-template-columns:1fr;margin-bottom:0}
+
+/* ---- network ----------------------------------------------------------------------- */
+.tf{width:100%;margin-bottom:9px;background:var(--well);border:1px solid var(--line);
+ color:var(--ink);font:400 12px/1 var(--mono);letter-spacing:.3px;padding:11px}
+.tf:focus{outline:0;border-color:var(--grn)}
+.chk{display:flex;align-items:center;gap:9px;cursor:pointer;margin:2px 0 11px;
+ font-size:11px;color:var(--dim)}
+.chk i{width:14px;height:14px;flex:0 0 auto;border:1px solid var(--line);background:var(--well)}
+.chk.on i{background:var(--grn);border-color:var(--grn)}
+.row{display:flex;gap:9px}
+.row .go{flex:1}
+
+/* ---- transfer ---------------------------------------------------------------------- */
+input[type=file]{display:none}
+.fl{display:flex;align-items:center;gap:11px;margin-bottom:10px;min-width:0}
+.pick{flex:0 0 auto;cursor:pointer;background:transparent;border:1px solid var(--line);
+ color:var(--dim);padding:11px 15px;font:400 10px/1 var(--px);letter-spacing:1.3px}
+.pick:active{border-color:var(--grn);color:var(--grn)}
+.fn{min-width:0;font-size:11px;color:var(--faint);letter-spacing:.3px;
+ overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fn.set{color:var(--ink)}
+.go{width:100%;margin:0;-webkit-appearance:none;cursor:pointer;
+ background:var(--grn);color:#04121a;border:1px solid var(--grn);box-shadow:3px 3px 0 #114230;
+ font:400 12px/1 var(--px);letter-spacing:1.6px;padding:14px 0}
+.go:active{transform:translate(3px,3px);box-shadow:none}
+.go:disabled{background:transparent;color:var(--faint);border-color:var(--line);
+ box-shadow:none;transform:none;cursor:default}
+.pr{display:none;position:relative;height:11px;margin-top:11px;
+ background:var(--well);border:1px solid var(--line)}
+.pr i{display:block;height:100%;width:0;background:var(--grn)}
+.pr::after{content:"";position:absolute;inset:0;pointer-events:none;
+ background:repeating-linear-gradient(90deg,transparent 0 5px,var(--void) 5px 7px)}
+.msg{margin-top:9px;font-size:11px;line-height:1.55;letter-spacing:.3px;
+ color:var(--dim);white-space:pre-wrap}
+.msg.ok{color:var(--grn)}
+.msg.err{color:var(--mag)}
+
+/* ---- the cat keeps watch on the bottom rule ---------------------------------------- */
+.foot{position:relative;margin-top:64px;border-top:1px solid var(--line)}
+.cat{position:absolute;left:1px;bottom:100%;width:81px;height:42px;image-rendering:pixelated;
+ background:url(data:image/gif;base64,@CAT@) left bottom/81px 42px no-repeat}
+.pmt{padding-top:11px;font:400 9px/1.6 var(--px);letter-spacing:1px;color:var(--faint)}
+.pmt b{color:var(--grn);font-weight:400}
+.cur{display:inline-block;width:6px;height:10px;background:var(--grn);
+ vertical-align:-1px;animation:bl 1.05s steps(1) infinite}
+@keyframes bl{50%{opacity:0}}
+@media (max-width:360px){.h em{display:none}}
+</style></head><body>
+
+<div class="bar"><div class="in">
+<b>T-EMBED//CC1101</b><span>::</span><span class="ip">192.168.4.1</span>
+<span class="lk"><i class="dot" id="dot"></i><span id="sm">LINK</span></span>
+</div></div>
+
+<div class="wrap">
+
+<div class="h"><i class="g"></i><span>SCREEN</span><i class="r"></i><em>LIVE MIRROR</em></div>
+<div class="p">
+<div class="crt"><canvas id="scr" width="320" height="170"></canvas>
+<div class="ns" id="ns">NO SIGNAL</div></div>
+<div class="rd"><span>RES <b id="r1">---</b></span><span>RGB565 <b id="r2">--</b>/F</span>
+<span><b id="r3">--</b> FPS</span></div>
+<div class="lab">STREAM QUALITY</div>
+<div class="seg"><button class="qb on" data-s="1">FULL</button>
+<button class="qb" data-s="2">FAST</button><button class="qb" data-s="3">LOW</button></div>
+</div>
+
+<div class="h"><i class="g"></i><span>REMOTE</span><i class="r"></i><em>REAL INPUT</em></div>
+<div class="p">
+<div class="pad"><button class="k ar l" data-k="left"><i></i></button>
+<button class="k mid" data-k="ok">OK</button>
+<button class="k ar r" data-k="right"><i></i></button></div>
+<div class="kh"><span>WHEEL -</span><span>PRESS</span><span>WHEEL +</span></div>
+<div class="pad"><button class="k wide" data-k="back">BACK</button></div>
+<div class="kh one"><span>SIDE BUTTON / LEAVES A SCREEN</span></div>
+</div>
+
+<div class="h"><i class="g"></i><span>NETWORK</span><i class="r"></i><em id="nmode">-</em></div>
+<div class="p">
+<p class="note">Save your normal Wi-Fi here and the launcher joins it instead of opening its
+own hotspot. Your phone then never has to switch networks - which is what makes the
+<b>T-Embed Remote</b> app reconnect in seconds after a reboot.</p>
+<input class="tf" id="nssid" placeholder="network name (SSID)" autocapitalize="off" autocorrect="off">
+<input class="tf" id="npass" type="password" placeholder="password">
+<div class="chk" id="nauto"><i></i><span>START WI-FI AT BOOT</span></div>
+<div class="row">
+<button class="go" id="nsave">SAVE</button>
+<button class="go" id="njoin">SAVE &amp; JOIN</button>
+</div>
+<div class="msg" id="nmsg"></div>
+</div>
+
+<div class="h"><i class="g"></i><span>FIRMWARE</span><i class="r"></i><em>.BIN</em></div>
+<div class="p">
+<p class="note">An ESP32-S3 image. It is written to the SD card - install it into a slot from
+<b>INSTALL</b> on the device.</p>
+<div class="fl"><label class="pick" for="bf">SELECT</label><span class="fn" id="bn">no file</span></div>
+<input type="file" id="bf" accept=".bin">
+<button class="go" id="bb">TRANSMIT</button>
+<div class="pr" id="bp"><i></i></div><div class="msg" id="bm"></div>
+</div>
+
+<div class="h"><i class="g"></i><span>THEME</span><i class="r"></i><em>.ZIP</em></div>
+<div class="p">
+<p class="note">A pack straight from the theme creator. It is unpacked into <b>/catcolor</b> -
+pick it under <b>Settings &gt; Design &gt; Theme</b>.</p>
+<div class="fl"><label class="pick" for="tf">SELECT</label><span class="fn" id="tn">no file</span></div>
+<input type="file" id="tf" accept=".zip">
+<button class="go" id="tb">TRANSMIT</button>
+<div class="pr" id="tp"><i></i></div><div class="msg" id="tm"></div>
+</div>
+
+<div class="foot"><i class="cat"></i>
+<div class="pmt">oreo@t-embed<b>:~$</b> <span class="cur"></span></div></div>
+
+</div><script>
+function $(i){return document.getElementById(i)}
+function all(s){return [].slice.call(document.querySelectorAll(s))}
+function sz(n){return n<1024?n+" B":n<1048576?(n/1024).toFixed(1)+" K":(n/1048576).toFixed(2)+" M"}
+
+// ---- transfer ----------------------------------------------------------------------------
+function bind(fi,nm){
+ $(fi).onchange=function(){
+   var f=this.files[0];
+   $(nm).textContent=f?f.name+"  "+sz(f.size):"no file";
+   $(nm).className=f?"fn set":"fn";
+ };
+}
+function up(fi,btn,pr,msg,url,ext){
+ var f=$(fi).files[0];
+ if(!f){msg.textContent="Nothing selected.";msg.className="msg err";return}
+ if(!f.name.toLowerCase().endsWith(ext)){
+   msg.textContent="That is not a "+ext+" file.";msg.className="msg err";return}
+ var fd=new FormData();fd.append("f",f);
+ var x=new XMLHttpRequest();x.open("POST",url);
+ pr.style.display="block";pr.firstChild.style.width="0";
+ btn.disabled=true;msg.textContent="";msg.className="msg";
+ x.upload.onprogress=function(e){if(e.lengthComputable)
+   pr.firstChild.style.width=(e.loaded/e.total*100)+"%"};
+ x.onload=function(){btn.disabled=false;
+   msg.textContent=x.responseText;msg.className="msg "+(x.status==200?"ok":"err")};
+ x.onerror=function(){btn.disabled=false;msg.textContent="Transfer failed.";msg.className="msg err"};
+ x.send(fd);
+}
+
+// ---- mirror: raw RGB565 straight into an ImageData, one request in flight at a time -------
+var sc=$("scr"),sx=sc.getContext("2d"),busy=false,fails=0,step=1,fps=0,last=0;
+function link(ok,t){$("dot").className=ok?"dot":"dot off";$("sm").textContent=t;
+ $("sm").parentNode.style.color=ok?"var(--grn)":"var(--mag)";
+ $("ns").style.display=ok?"none":"flex"}
+function tick(){
+ if(busy)return;busy=true;
+ var x=new XMLHttpRequest();x.open("GET","/fb?s="+step);x.responseType="arraybuffer";
+ x.onload=function(){
+   busy=false;
+   if(x.status!=200){link(false,"BUSY");return}
+   var w=+x.getResponseHeader("X-Width")||160,h=+x.getResponseHeader("X-Height")||85,
+       v=new DataView(x.response),n=w*h;
+   if(v.byteLength<n*2)return;
+   var img=sx.createImageData(w,h),d=img.data;
+   for(var i=0;i<n;i++){
+     var p=v.getUint16(i*2,true);                       // little-endian RGB565
+     d[i*4]  =((p>>11)&31)*255/31|0;
+     d[i*4+1]=((p>>5)&63)*255/63|0;
+     d[i*4+2]=(p&31)*255/31|0;
+     d[i*4+3]=255;
+   }
+   if(sc.width!=w||sc.height!=h){sc.width=w;sc.height=h}
+   sx.putImageData(img,0,0);
+   var t=Date.now();
+   if(last){var f=1000/Math.max(1,t-last);fps=fps?fps*.72+f*.28:f}
+   last=t;fails=0;
+   $("r1").textContent=w+"x"+h;
+   $("r2").textContent=sz(v.byteLength);
+   $("r3").textContent=fps.toFixed(1);
+   link(true,"LIVE");
+ };
+ x.onerror=function(){busy=false;last=0;if(++fails>3)link(false,"LOST")};
+ x.send();
+}
+setInterval(tick,120);
+
+all(".qb").forEach(function(b){b.onclick=function(){
+ step=+b.dataset.s;fps=0;last=0;
+ all(".qb").forEach(function(o){o.className="qb"});b.className="qb on"}});
+
+// ---- remote: the same four events the wheel and the side button produce -------------------
+all(".k").forEach(function(b){b.onclick=function(){
+ var q=new XMLHttpRequest();q.open("GET","/key?k="+b.dataset.k);q.send();
+ setTimeout(tick,60);          // pull a frame right after, so it feels immediate
+}});
+
+// ---- network settings --------------------------------------------------------------------
+var autoOn=false;
+function paintAuto(){$("nauto").className=autoOn?"chk on":"chk"}
+$("nauto").onclick=function(){autoOn=!autoOn;paintAuto()};
+function loadNet(){
+ var x=new XMLHttpRequest();x.open("GET","/net");
+ x.onload=function(){
+   if(x.status!=200)return;
+   try{var n=JSON.parse(x.responseText)}catch(e){return}
+   $("nmode").textContent=(n.mode=="sta"?"ON "+n.ssid:"OWN HOTSPOT")+"  "+n.ip;
+   if(n.home&&!$("nssid").value)$("nssid").value=n.home;
+   autoOn=!!n.auto;paintAuto();
+ };
+ x.send();
+}
+function saveNet(apply){
+ var m=$("nmsg");m.textContent="";m.className="msg";
+ var body="ssid="+encodeURIComponent($("nssid").value)+
+          "&pass="+encodeURIComponent($("npass").value)+
+          "&auto="+(autoOn?1:0)+(apply?"&apply=1":"");
+ var x=new XMLHttpRequest();x.open("POST","/net");
+ x.setRequestHeader("Content-Type","application/x-www-form-urlencoded");
+ x.onload=function(){m.textContent=x.responseText;m.className="msg "+(x.status==200?"ok":"err");
+   if(!apply)loadNet()};
+ x.onerror=function(){m.textContent="Could not save.";m.className="msg err"};
+ x.send(body);
+}
+$("nsave").onclick=function(){saveNet(false)};
+$("njoin").onclick=function(){saveNet(true)};
+loadNet();
+
+bind("bf","bn");bind("tf","tn");
+$("bb").onclick=function(){up("bf",this,$("bp"),$("bm"),"/bin",".bin")};
+$("tb").onclick=function(){up("tf",this,$("tp"),$("tm"),"/theme",".zip")};
+</script></body></html>

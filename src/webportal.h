@@ -1,7 +1,18 @@
 #pragma once
+#include <Arduino.h>
 
-// Wi-Fi upload portal. The launcher becomes an access point and serves a small page where you
-// can upload firmware .bin files and theme packs (the .zip straight from the theme creator)
-// from a phone or laptop — no card reader, no cable. Blocks until BACK is pressed, then shuts
-// the radio down again.
+// Wi-Fi portal. The launcher becomes an access point and serves a small page where you can
+// upload firmware .bin files and theme packs, mirror the screen, and drive the UI remotely.
+//
+// webPortalEnter() shows the info screen and blocks. BACK shuts the radio down; PRESS leaves the
+// server RUNNING and returns to the menu, so the phone keeps mirroring while you navigate. For
+// that to work the UI's idle hooks must call webPortalPoll() on every pass.
 void webPortalEnter();
+void webPortalPoll();      // service the web server; cheap no-op when nothing is running
+bool webPortalRunning();   // true while the access point is up
+void webPortalStop();      // tear down server + radio
+
+// Bring Wi-Fi up at boot if the user enabled it in the portal ("start at boot"). Call once
+// from setup(), AFTER the PIN — otherwise the remote could be used to answer the PIN screen.
+void webPortalAutoStart();
+bool webPortalAutoEnabled();
