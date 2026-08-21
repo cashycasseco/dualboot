@@ -83,6 +83,13 @@
     flex-wrap:wrap; }
   .dock .info { font-family:var(--mono); font-size:12px; color:var(--faint); flex:1; }
   .icons { display:grid; grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); gap:10px; margin-top:12px; }
+  /* the two icon groups are labelled, so it's obvious which ones land on an app tile */
+  .group { margin-top:20px; padding-top:16px; border-top:1px solid var(--line); }
+  .ghead { font-family:var(--display); font-weight:700; font-size:14px; display:flex;
+    align-items:center; gap:10px; flex-wrap:wrap; }
+  .badge { font-family:var(--body); font-weight:600; font-size:11px; letter-spacing:.3px;
+    color:#04140c; background:var(--accent); border-radius:20px; padding:2px 10px; }
+  .gnote { color:var(--muted); font-size:12.5px; line-height:1.6; margin:5px 0 0; max-width:64ch; }
   .icon { background:#0e1122; border:1px solid var(--line); border-radius:10px; padding:8px 6px;
     text-align:center; cursor:pointer; transition:border-color .15s; }
   .icon:hover { border-color:var(--accent); }
@@ -91,7 +98,17 @@
   .icon.custom { border-color:var(--accent); }
   .icon.custom .nm { color:var(--accent); }
   .preview { display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap; }
-  .preview canvas { border-radius:8px; border:1px solid var(--line); image-rendering:pixelated; }
+  /* the 320px device preview must shrink on a phone instead of widening the page */
+  .preview canvas { border-radius:8px; border:1px solid var(--line); image-rendering:pixelated;
+    max-width:100%; height:auto; }
+  code, .hint, .gnote, p, li, .files { overflow-wrap:anywhere; }
+  @media(max-width:460px){
+    body { padding:0 12px 120px; }
+    h1 { font-size:23px; }
+    .card, details.step > summary, details.step .body { padding-left:16px; padding-right:16px; }
+    .dock .inner { gap:9px; }
+    .dock button { width:100%; }
+  }
   .strip { display:flex; gap:3px; margin-top:8px; }
   .strip i { width:14px; height:14px; border-radius:3px; display:block; }
   .files { font-size:12px; color:var(--muted); margin-top:8px; }
@@ -162,12 +179,25 @@
     <summary><h2><span class="num">03</span>Icons</h2><span class="opt">optional</span></summary>
     <div class="body">
     <p class="hint">Click an icon to replace it with your own image (PNG, SVG, JPG). It's scaled to
-      48×48 and reduced to a 1-bit mask — the launcher tints it to match the theme, so shape is all
-      that matters. Transparent PNGs work best. Click a replaced icon again to re-upload, or use
-      <b>invert</b> / <b>reset</b> below it.<br>
-      Icons marked <b>*</b> are the ones you can assign to an app slot on the device
-      (<b>Settings → Icons</b>), so restyling those restyles your app tiles.</p>
-    <div class="icons" id="icons"></div>
+      48×48 and reduced to a 1-bit mask — the launcher tints it to match the theme, so only the
+      shape matters. Transparent PNGs work best. Click a replaced icon again to re-upload, or use
+      <b>invert</b> / <b>reset</b> below it.</p>
+
+    <div class="group">
+      <div class="ghead">Menu icons</div>
+      <p class="gnote">Used throughout the launcher's own screens — settings, install, USB and
+        so on.</p>
+      <div class="icons" id="iconsMenu"></div>
+    </div>
+
+    <div class="group">
+      <div class="ghead">Firmware slot icons <span class="badge">these appear on your app tiles</span></div>
+      <p class="gnote">These are exactly the icons the device offers when you give a firmware slot
+        its icon — right after installing, or later under <b>Settings → Icons</b>. Restyle these and
+        your Bruce / Flipper / custom tiles change with them. A few (flash, USB, Wi-Fi, PIN, theme)
+        also show up elsewhere in the menus.</p>
+      <div class="icons" id="iconsSlot"></div>
+    </div>
     <div style="margin-top:14px" class="dl">
       <button class="ghost" id="resetIcons">Reset all icons</button>
       <span class="files" id="iconInfo">using built-in icons</span>
@@ -251,8 +281,8 @@ const ICON_NAMES = ["NONE","APP","EMPTY","INSTALL","USB","SETTINGS","DESIGN","DE
 const ICON_LABELS = ["","App slot","Empty slot","Install (SD)","USB drive","Settings","Design",
   "Delete","Back","PIN","About","Power","Brightness","LED colour","Animation","Colour","Theme",
   "Flash","File","Selected","Wi-Fi upload",
-  "Ghost *","Antenna *","Bug *","Skull *","Gamepad *","Chip *","Key *","Shield *","Terminal *",
-  "NFC *","Wrench *","Star *"];
+  "Ghost","Antenna","Bug","Skull","Gamepad","Chip","Key","Shield","Terminal",
+  "NFC","Wrench","Star"];
 const ICON_COUNT = ICON_NAMES.length;
 
 let defaultMasks = [];            // Uint8Array(ICON_BYTES) per icon, from icons_default.bin
@@ -342,12 +372,20 @@ function imageToMask(img, invert) {
   return mask;
 }
 
+// Mirrors kAppIcons[] in src/apps.cpp — exactly what the device offers when you give a firmware
+// slot an icon. A few of these double as menu icons, which the group note points out.
+const SLOT_ICONS = ["APP","GHOST","ANTENNA","BUG","SKULL","GAMEPAD","CHIP","KEY","SHIELD",
+  "TERMINAL","NFC","WRENCH","STAR","FLASH","USB","WIFI","PIN","THEME"];
+const isSlotIcon = i => SLOT_ICONS.includes(ICON_NAMES[i]);
+
 function renderIcons() {
   const accent = quant565(hex2rgb($("accent").value));
   const fg = contrastOf(accent);
-  const box = $("icons");
-  box.innerHTML = "";
+  const menuBox = $("iconsMenu"), slotBox = $("iconsSlot");
+  menuBox.innerHTML = "";
+  slotBox.innerHTML = "";
   for (let i = 1; i < ICON_COUNT; i++) {
+    const box = isSlotIcon(i) ? slotBox : menuBox;
     const d = document.createElement("div");
     d.className = "icon" + (customised.has(i) ? " custom" : "");
     d.title = "Click to replace " + ICON_LABELS[i];
