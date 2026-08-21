@@ -5,22 +5,40 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Dual-Boot Launcher — Theme Creator</title>
 <style>
-  :root { --bg:#0e1122; --card:#171b30; --ink:#eef0f8; --muted:#8492b4; --accent:#2fe38a; --line:#263056; }
+  :root { --bg:#0a0d18; --card:#111629; --ink:#e9edf7; --muted:#8b98b8; --accent:#2fe38a;
+    --line:#1e2740; --faint:#5d6a8a;
+    --display:'Chakra Petch',system-ui,sans-serif;
+    --body:'Inter',system-ui,-apple-system,sans-serif;
+    --mono:ui-monospace,"Cascadia Mono",Consolas,monospace; }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink);
-    font-family:ui-monospace,"Cascadia Mono",Consolas,monospace; padding:24px 16px 60px; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--body);
+    font-size:15px; line-height:1.6; padding:0 16px 110px; -webkit-font-smoothing:antialiased;
+    background-image:radial-gradient(circle at 1px 1px,#161d33 1px,transparent 0);
+    background-size:22px 22px; }
   .wrap { max-width:880px; margin:0 auto; }
-  .logo { display:flex; align-items:center; gap:12px; margin-bottom:6px; }
-  .logo .mark { width:22px; height:22px; background:var(--accent); border-radius:5px; position:relative; }
-  .logo .mark::after { content:""; position:absolute; inset:6px; background:var(--bg); border-radius:2px; }
-  h1 { font-size:20px; margin:0; letter-spacing:1px; }
-  h2 { font-size:14px; letter-spacing:1px; margin:0 0 4px; color:var(--accent); }
-  .sub { color:var(--muted); font-size:13px; margin:4px 0 22px; line-height:1.6; }
+  .topbar { display:flex; align-items:center; gap:18px; height:58px; margin-bottom:26px;
+    border-bottom:1px solid var(--line); }
+  .brand { display:flex; align-items:center; gap:10px; font-family:var(--display);
+    font-weight:700; letter-spacing:.5px; font-size:15px; }
+  .marks { display:flex; gap:3px; }
+  .marks i { width:9px; height:18px; display:block; border-radius:1px; }
+  .marks i:nth-child(1){ background:var(--accent); }
+  .marks i:nth-child(2){ background:#00d5ff; height:12px; align-self:flex-end; }
+  .marks i:nth-child(3){ background:#33406b; height:9px; align-self:flex-end; }
+  .topbar .sp { flex:1; }
+  .topbar a { color:var(--muted); font-size:13.5px; text-decoration:none; font-weight:500; }
+  .topbar a:hover { color:var(--ink); }
+  h1 { font-family:var(--display); font-weight:700; font-size:30px; margin:0 0 10px;
+    letter-spacing:-.3px; }
+  h2 { font-family:var(--display); font-size:16px; letter-spacing:0; margin:0 0 4px; }
+  h2 .num { color:var(--accent); font-family:var(--mono); font-size:13px; margin-right:8px; }
+  .sub { color:var(--muted); font-size:14.5px; margin:0 0 26px; line-height:1.65; max-width:64ch; }
   .sub a { color:var(--accent); }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:14px;
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
     padding:20px 22px; margin-bottom:16px; }
-  .hint { color:var(--muted); font-size:12px; line-height:1.6; margin:6px 0 0; }
-  label { font-size:12px; color:var(--muted); display:block; margin-bottom:4px; }
+  .hint { color:var(--muted); font-size:13px; line-height:1.6; margin:6px 0 0; }
+  label { font-size:12px; color:var(--muted); display:block; margin-bottom:4px;
+    font-family:var(--mono); letter-spacing:.3px; }
   input[type=text], select { background:#0e1122; color:var(--ink); border:1px solid var(--line);
     border-radius:8px; padding:8px 10px; font:inherit; font-size:13px; width:100%; }
   input[type=color] { width:100%; height:38px; background:#0e1122; border:1px solid var(--line);
@@ -28,10 +46,42 @@
   input[type=range] { width:100%; accent-color:var(--accent); }
   .row { display:flex; gap:14px; flex-wrap:wrap; }
   .row > div { flex:1 1 150px; min-width:140px; }
-  button { background:var(--accent); color:#0e1122; border:0; border-radius:9px;
-    font:600 13px/1 ui-monospace,monospace; padding:11px 18px; cursor:pointer; letter-spacing:.4px; }
-  button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line); }
+  button { background:var(--accent); color:#04140c; border:0; border-radius:8px;
+    font-family:var(--display); font-weight:700; font-size:14px; padding:11px 20px;
+    cursor:pointer; letter-spacing:.3px; }
+  button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line);
+    font-family:var(--body); font-weight:600; font-size:13px; }
+  button.ghost:hover { border-color:var(--accent); color:var(--accent); }
   button:disabled { opacity:.45; cursor:not-allowed; }
+
+  /* preset palettes: something good-looking to start from instead of a blank picker */
+  .presets { display:flex; gap:9px; flex-wrap:wrap; margin-top:4px; }
+  .preset { display:flex; align-items:center; gap:7px; background:#0d1120; cursor:pointer;
+    border:1px solid var(--line); border-radius:20px; padding:6px 13px 6px 7px;
+    font-size:12.5px; color:var(--muted); font-family:var(--body); font-weight:500; }
+  .preset:hover { border-color:var(--accent); color:var(--ink); }
+  .preset .sw { width:15px; height:15px; border-radius:50%; display:block; flex:none; }
+
+  /* optional steps stay folded away so the default path is: colours -> preview -> download */
+  details.step { background:var(--card); border:1px solid var(--line); border-radius:12px;
+    margin-bottom:16px; }
+  details.step > summary { list-style:none; cursor:pointer; padding:18px 22px;
+    display:flex; align-items:center; gap:10px; }
+  details.step > summary::-webkit-details-marker { display:none; }
+  details.step > summary::after { content:"+"; margin-left:auto; color:var(--accent);
+    font-family:var(--mono); font-size:16px; }
+  details.step[open] > summary::after { content:"−"; }
+  details.step > summary h2 { margin:0; }
+  details.step .body { padding:0 22px 22px; }
+  .opt { font-family:var(--body); font-weight:500; font-size:12px; color:var(--faint);
+    border:1px solid var(--line); border-radius:20px; padding:2px 9px; }
+
+  /* the download stays reachable no matter how far you scroll */
+  .dock { position:fixed; left:0; right:0; bottom:0; z-index:30; background:rgba(10,13,24,.94);
+    backdrop-filter:blur(10px); border-top:1px solid var(--line); padding:12px 16px; }
+  .dock .inner { max-width:880px; margin:0 auto; display:flex; align-items:center; gap:14px;
+    flex-wrap:wrap; }
+  .dock .info { font-family:var(--mono); font-size:12px; color:var(--faint); flex:1; }
   .icons { display:grid; grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); gap:10px; margin-top:12px; }
   .icon { background:#0e1122; border:1px solid var(--line); border-radius:10px; padding:8px 6px;
     text-align:center; cursor:pointer; transition:border-color .15s; }
@@ -56,16 +106,25 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="logo"><div class="mark"></div><h1>THEME CREATOR</h1></div>
+  <div class="topbar">
+    <span class="brand"><span class="marks"><i></i><i></i><i></i></span>THEME CREATOR</span>
+    <span class="sp"></span>
+    <a href="./">← Flasher</a>
+    <a href="https://github.com/loznoc/dualboot">GitHub</a>
+  </div>
+
+  <h1>Make it yours</h1>
   <div class="sub">
-    Build a complete theme pack for the Dual-Boot Launcher — colours, your own icons and your own
-    boot animation (drop in a GIF, it's converted for you). Everything happens in your browser;
-    nothing is uploaded. <a href="./">← back to the flasher</a>
+    Pick a starting point, tweak the colours, download. That's the whole thing — icons and a
+    custom boot animation are there if you want them, folded away if you don't. Everything runs
+    in your browser; nothing is uploaded.
   </div>
 
   <div class="card">
-    <h2>1 · BASICS</h2>
-    <div class="row" style="margin-top:10px">
+    <h2><span class="num">01</span>Colours</h2>
+    <p class="hint" style="margin-bottom:12px">Start from a preset, then adjust anything.</p>
+    <div class="presets" id="presets"></div>
+    <div class="row" style="margin-top:18px">
       <div style="flex:2 1 220px">
         <label>Theme name</label>
         <input type="text" id="name" value="My Theme" maxlength="24" />
@@ -87,7 +146,7 @@
   </div>
 
   <div class="card">
-    <h2>2 · PREVIEW</h2>
+    <h2><span class="num">02</span>Preview</h2>
     <div class="preview" style="margin-top:12px">
       <canvas id="prev" width="640" height="340" style="width:320px;height:170px"></canvas>
       <div>
@@ -99,8 +158,9 @@
     </div>
   </div>
 
-  <div class="card">
-    <h2>3 · ICONS <span style="color:var(--muted);font-weight:400">(optional)</span></h2>
+  <details class="step">
+    <summary><h2><span class="num">03</span>Icons</h2><span class="opt">optional</span></summary>
+    <div class="body">
     <p class="hint">Click an icon to replace it with your own image (PNG, SVG, JPG). It's scaled to
       48×48 and reduced to a 1-bit mask — the launcher tints it to match the theme, so shape is all
       that matters. Transparent PNGs work best. Click a replaced icon again to re-upload, or use
@@ -112,10 +172,12 @@
       <button class="ghost" id="resetIcons">Reset all icons</button>
       <span class="files" id="iconInfo">using built-in icons</span>
     </div>
-  </div>
+    </div>
+  </details>
 
-  <div class="card">
-    <h2>4 · BOOT ANIMATION <span style="color:var(--muted);font-weight:400">(optional)</span></h2>
+  <details class="step">
+    <summary><h2><span class="num">04</span>Boot animation</h2><span class="opt">optional</span></summary>
+    <div class="body">
     <p class="hint">Drop in an animated <b>GIF</b> (or WebP/APNG, or several still images) and it's
       converted into the launcher's frame format automatically — cropped to the screen's shape,
       resized and written as <code>.raw</code> frames.</p>
@@ -140,14 +202,11 @@
     </div>
     <div class="bar"><i id="animBar"></i></div>
     <div id="animPrev" style="margin-top:12px"></div>
-  </div>
+    </div>
+  </details>
 
   <div class="card">
-    <h2>5 · DOWNLOAD &amp; INSTALL</h2>
-    <div class="dl" style="margin-top:12px">
-      <button id="build">⬇ Download theme pack (.zip)</button>
-      <span class="files" id="buildInfo"></span>
-    </div>
+    <h2><span class="num">05</span>Put it on the device</h2>
     <p class="hint" style="margin-bottom:8px"><b style="color:var(--accent)">Easiest — over Wi-Fi:</b>
       on the device pick <b>WiFi</b> in the main menu, join the hotspot it shows, open
       <code>http://192.168.4.1</code> and upload this .zip. It's unpacked on the device for you.</p>
@@ -173,6 +232,11 @@
     </div>
   </div>
 </div>
+
+<div class="dock"><div class="inner">
+  <span class="info" id="buildInfo">theme.txt only</span>
+  <button id="build">Download theme pack (.zip)</button>
+</div></div>
 
 <input type="file" id="iconFile" accept="image/*" hidden />
 <input type="file" id="animFile" accept="image/*" multiple hidden />
@@ -528,12 +592,13 @@ function makeZip(files) {                    // [{name, data}] — stored, no co
 const slugify = s => (s.trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"") || "theme").slice(0,24);
 
 function updateBuildInfo() {
-  let n = 1;
-  if (customised.size) n++;
-  if (animFrames.length) n += animFrames.length;
+  const bits = ["colours"];
+  if (customised.size) bits.push(`${customised.size} custom icon${customised.size > 1 ? "s" : ""}`);
+  if (animFrames.length) bits.push(`${animFrames.length}-frame animation`);
   const bytes = (customised.size ? 8 + ICON_BYTES*ICON_COUNT : 0) +
                 animFrames.reduce((a,f) => a + f.length, 0);
-  $("buildInfo").textContent = `${n} files · ${(bytes/1048576).toFixed(2)} MB`;
+  const size = bytes > 1024 ? ` · ${(bytes/1048576).toFixed(2)} MB` : "";
+  $("buildInfo").textContent = `${$("name").value.trim() || "My Theme"}: ${bits.join(" + ")}${size}`;
 }
 
 $("build").onclick = () => {
@@ -565,6 +630,37 @@ $("build").onclick = () => {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 };
+
+// ---------------------------------------------------------------- presets
+// A blank colour picker is a bad starting point, so offer a few that already work on the device.
+const PRESETS = [
+  { name:"Emerald",  accent:"#2fe38a", led:"#2fe38a", bri:60 },
+  { name:"Cyberpunk",accent:"#00e5ff", led:"#ff00aa", bri:70 },
+  { name:"Sunset",   accent:"#ff7a1a", led:"#ff2f6d", bri:55 },
+  { name:"Violet",   accent:"#a35cff", led:"#7a1aff", bri:60 },
+  { name:"Crimson",  accent:"#ff2d3f", led:"#ff0033", bri:50 },
+  { name:"Ice",      accent:"#8ad6ff", led:"#2f9bff", bri:45 },
+  { name:"Mono",     accent:"#c8c8c8", led:"#8a8a8a", bri:35 },
+];
+(function buildPresets() {
+  const box = $("presets");
+  for (const p of PRESETS) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "preset";
+    b.innerHTML = `<span class="sw" style="background:${p.accent}"></span>${p.name}`;
+    b.onclick = () => {
+      $("accent").value = p.accent;
+      $("led").value = p.led;
+      $("bri").value = p.bri;
+      $("briVal").textContent = p.bri + "%";
+      if (!$("name").value.trim() || PRESETS.some(x => x.name === $("name").value.trim()))
+        $("name").value = p.name;
+      refresh();
+    };
+    box.appendChild(b);
+  }
+})();
 
 // ---------------------------------------------------------------- init
 ["accent","led"].forEach(id => $(id).oninput = refresh);
