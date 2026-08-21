@@ -3,6 +3,10 @@
 #               except a software restart, so a cold boot always lands here.
 #   app0/1/2 -> ota_0/1/2: any firmware installed from SD goes into one of these. Each
 #               slot is 4.5 MB, enough for the largest common ESP32-S3 firmware (Bruce).
+#   spiffs -> the internal LittleFS every ESP32 firmware expects to find. Bruce keeps its
+#             settings there (/bruce.conf via LittleFS); with no such partition the mount
+#             fails and every save is silently dropped. It sits in the tail gap so no app
+#             slot moves and nothing has to be reinstalled.
 # The launcher stores a display name per slot in NVS, so slots are not tied to Bruce/Flipper.
 # Name,     Type, SubType,   Offset,    Size,      Flags
 nvs,        data, nvs,       0x9000,    0x5000,
@@ -12,3 +16,4 @@ coredump,   data, coredump,  0x190000,  0x10000,
 app0,       app,  ota_0,     0x1A0000,  0x480000,
 app1,       app,  ota_1,     0x620000,  0x480000,
 app2,       app,  ota_2,     0xAA0000,  0x480000,
+spiffs,     data, spiffs,    0xF20000,  0xE0000,
