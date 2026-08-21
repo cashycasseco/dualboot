@@ -19,8 +19,10 @@ Nothing but the launcher ships on the device — you add the rest.
   done. Three app slots.
 - **USB drive mode.** Expose the SD card as a USB mass-storage drive to copy files from your PC
   without removing it.
-- **Wi-Fi upload portal.** The launcher can host its own hotspot and serve a small upload page —
-  drop firmware `.bin` files and theme packs on from a phone, no cable and no card reader.
+- **Wi-Fi portal with screen mirror + remote.** The launcher serves a small page over Wi-Fi:
+  watch its screen live from a phone, drive the wheel and the side button from the browser, and
+  drop firmware `.bin` files and theme packs onto the card — no cable, no card reader. It can
+  host its own hotspot or join your normal network, and answers to `tembed.local`.
 - **Web-flashable.** Install the launcher onto a fresh device from the browser — no toolchain.
 - **Themeable.** Full-spectrum accent-colour picker, WS2812 LED colour + brightness (0 % = off),
   coordinated presets, and **complete custom theme packs** — colours, your own icons and your own
@@ -50,12 +52,34 @@ esptool --chip esp32s3 write_flash 0x0 launcher.bin
 ```
 
 `launcher.bin` is a complete image (custom bootloader + partition table + launcher app) — it does
-**not** contain Bruce/Flipper/anything else. `new_install_prompt_erase` in the web flasher wipes
-the chip first for a clean install.
+**not** contain Bruce/Flipper/anything else.
 
 > **Updating a device that already runs this launcher:** its USB runs in OTG mode, which blocks a
 > flasher's auto-reset. On the device go to **Settings → Power → Flash (web) → press** to enter
 > download mode first, then flash. A fresh device needs no such step; a power-cycle cancels it.
+
+The web flasher writes the three pieces at their own offsets (`0x0`, `0x8000`, `0x10000`) rather
+than one image across the front of the flash. That deliberately steps around the settings area, so
+an update keeps your PIN, theme, slot names and slot icons. The single-file `launcher.bin` does
+*not* — it writes `0xFF` across `0x9000–0x10000` and those all go back to defaults. Either way the
+app slots start at `0x1A0000` and are never touched, so installed firmware survives.
+
+### Updating an existing device — the Bruce settings fix
+
+Launchers flashed before v1.1 shipped a partition table with **no LittleFS partition**. Bruce
+saves its config there, so every setting you changed was silently dropped on the next boot —
+nothing on screen said anything had gone wrong. It looked like a Bruce bug; it was this table.
+
+The fix is one line in `partitions.csv`, and applying it is *only* the table — 3 KB, nothing else
+touched:
+
+```bash
+esptool --chip esp32s3 --port COM5 write-flash 0x8000 partitions.bin
+```
+
+[`docs/partitions.bin`](docs/partitions.bin) is the file; enter download mode as above first.
+Afterwards the first boot into Bruce formats the fresh filesystem itself and writes a default
+config, so you set your Bruce settings one more time — and from then on they stick.
 
 ---
 
@@ -88,17 +112,30 @@ Only the app image is written into the slot, so a standard single-file `.bin` (b
 **USB** on the main menu presents the SD card to your PC as a removable drive. Copy firmware,
 themes, or boot frames, then press back — the launcher re-reads the card.
 
-### Wi-Fi upload portal
+### Wi-Fi portal — mirror, remote, uploads
 
-**WiFi** on the main menu turns the launcher into an access point and serves a small upload page —
-handy when the device is nowhere near your PC.
+**WiFi** on the main menu brings up a small page that does three things: shows the screen live,
+drives the device, and takes file uploads.
 
-1. Pick **WiFi**; the screen shows the network name (`T-Embed-XXXX`), the password (`dualboot`) and
-   the address to open (`http://192.168.4.1`).
-2. Join it from a phone or laptop and open that address.
-3. Upload a **firmware `.bin`** (saved to the card — install it with **Install**) or a **theme pack
+1. Pick **WiFi**. First time it opens its own hotspot: the screen shows the network name
+   (`T-Embed-XXXX`), the password (`dualboot`) and the address (`http://192.168.4.1`).
+2. Join it and open that address.
+3. In the **NETWORK** panel put in your normal Wi-Fi. From then on the launcher *joins* that
+   network instead of opening a hotspot, so your phone never has to switch networks — and it
+   answers to `http://tembed.local` as well as its address. Tick **start wi-fi at boot** and it is
+   reachable straight after a reset (only after the PIN, so the lock screen is never exposed).
+4. **SCREEN** mirrors the framebuffer as raw RGB565, up to the full 320×170, with a quality
+   switch when you want it lighter. **REMOTE** injects the same four events the wheel and the
+   side button produce.
+5. Upload a **firmware `.bin`** (saved to the card — install it with **Install**) or a **theme pack
    `.zip`** straight from the theme creator (unpacked into `/catcolor` on the device).
-4. **BACK** shuts the hotspot down. It won't quit mid-upload.
+6. **BACK** hands the screen back and leaves Wi-Fi running, so the mirror keeps working while you
+   navigate the device normally. **Press** turns Wi-Fi off. Neither quits mid-upload.
+
+The endpoints are plain HTTP if you would rather script them: `GET /fb?s=1..4` (raw RGB565, with
+`X-Width`/`X-Height` headers), `GET /key?k=left|right|ok|back`, `GET|POST /cm?cmnd=nav
+prev|next|sel|esc` (the same names Bruce's WebUI uses), `GET|POST /net`, `POST /bin`,
+`POST /theme`.
 
 Theme zips are unpacked on-device. They must be *stored* (uncompressed) zips — which is exactly
 what the theme creator produces. Entries with `..` or absolute paths are rejected.
@@ -185,6 +222,12 @@ a software restart, so the bootloader falls back to the launcher. You can't get 
 | launcher | app  | test     | 0x10000   | 0x180000 | **the launcher itself**      |
 | coredump | data | coredump | 0x190000  | 0x10000  | crash dumps                  |
 | app0/1/2 | app  | ota_0/1/2| 0x1A0000… | 0x480000 | the three install slots      |
+| spiffs   | data | spiffs   | 0xF20000  | 0xE0000  | LittleFS for installed apps  |
+
+The `spiffs` partition is not for the launcher — it never touches it. It is there because almost
+every ESP32 firmware expects to find a LittleFS to keep its settings in, and without one those
+saves fail silently (see the Bruce fix above). It lives in the 896 KB at the end of the flash
+that nothing else used, so no app slot had to move and nothing needs reinstalling.
 
 ---
 
@@ -224,8 +267,11 @@ boards/         the lilygo-t-embed-cc1101 board variant
 bootloader/     custom 2nd-stage bootloader (prebuilt .bin + source)
 partitions.csv  the layout above
 firmware/       prebuilt launcher.bin
-docs/           GitHub Pages: the web flasher (index.html), the theme creator
-                (theme.html) and the built-in icon set it starts from
+tools/          build-time helpers: the Wi-Fi portal page and the script that bakes it into
+                src/webpage_data.h, the image assembler, the flasher, and the generators
+                for the font/icon/animation data headers
+docs/           GitHub Pages: the web flasher (index.html + the three .bin parts), the
+                theme creator (theme.html) and the built-in icon set it starts from
 ```
 
 ---
@@ -242,7 +288,11 @@ This launcher is a clean, from-scratch firmware, but it stands on great work by 
 - **Material Design Icons** by [Pictogrammers](https://pictogrammers.com/library/mdi/) — the UI
   icons (Apache-2.0), rasterized into `src/icons_data.h`.
 - **Cyberjunkies** font — the title typeface, rasterized into `src/cyberfont_data.h`.
-- **Oreo Cat** by **Aichan_owo** — the install-screen mascot, in `src/cat_data.h`.
+- **Oreo Cat** by **Aichan_owo** — the install-screen mascot (`src/cat_data.h`) and the cat on
+  the Wi-Fi portal page (`tools/assets/cat-stealth.gif`).
+- **Silkscreen** by [Jason Kottke](https://github.com/googlefonts/silkscreen) — the pixel typeface
+  on the Wi-Fi portal page, subset to ASCII and embedded in the page so it renders with no
+  internet. SIL Open Font License 1.1, see `tools/assets/OFL.txt`.
 
 The launcher's own code is released under the MIT License (see `LICENSE`). Bundled components keep
 their respective licenses. Firmware you install (Bruce, Flipper tools, Marauder, …) is not part of

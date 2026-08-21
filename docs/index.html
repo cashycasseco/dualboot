@@ -267,7 +267,14 @@ footer img.cat{image-rendering:pixelated;width:74px;height:auto;opacity:.85}
       <div class="meta" id="buildinfo">launcher.bin · reading…</div>
       <div class="alert"><b>Already running this launcher?</b> Its USB mode blocks the flasher's
         auto-reset. On the device: <b>Settings → Power → Flash (web)</b>, press, then Install.
-        A power-cycle cancels it. Fresh devices need none of this.</div>
+        A power-cycle cancels it. Fresh devices need none of this.<br><br>
+        Leave the erase box unticked and an update keeps your PIN, theme, slot names and every
+        installed firmware — the three parts are written around the settings area.</div>
+      <div class="alert"><b>Bruce settings not sticking?</b> That was this launcher, not Bruce:
+        the old partition table had no LittleFS partition for apps to save into, so every write
+        failed silently. Fixed here. Updating is enough; if you would rather change nothing else,
+        write just the table with
+        <code>esptool --chip esp32s3 write-flash 0x8000 partitions.bin</code>.</div>
     </div>
   </section>
 
@@ -367,13 +374,17 @@ eraseBox.addEventListener('change', () => {
     eraseBox.checked ? b.setAttribute('erase-first','') : b.removeAttribute('erase-first'));
 });
 
-// report the real size of the image the flasher will write
-fetch('./launcher.bin', { method:'HEAD' }).then(r => {
-  const n = +r.headers.get('content-length');
+// report what the flasher actually writes: three parts at their own offsets, so the
+// settings area between them is left alone
+const PARTS = [['bootloader.bin','0x0'],['partitions.bin','0x8000'],['launcher-app.bin','0x10000']];
+Promise.all(PARTS.map(([f]) =>
+  fetch('./' + f, { method:'HEAD' }).then(r => +r.headers.get('content-length') || 0)
+)).then(sizes => {
+  const n = sizes.reduce((a,b) => a+b, 0);
   if (!n) return;
   const mb = (n/1048576).toFixed(2);
   document.getElementById('buildinfo').textContent =
-    `launcher.bin · ${n.toLocaleString()} bytes (${mb} MB) · offset 0x0`;
+    `3 parts · ${n.toLocaleString()} bytes (${mb} MB) · 0x0 / 0x8000 / 0x10000`;
   document.getElementById('binmeta').textContent = mb + ' MB';
 }).catch(()=>{});
 
