@@ -1,0 +1,25 @@
+name: tembed_remote
+description: Screen mirror and remote control for the LilyGo T-Embed CC1101 — works with the dual-boot launcher and with stock Bruce.
+publish_to: "none"
+version: 0.1.0
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.2
+  multicast_dns: ^0.3.2
+  file_picker: ^8.1.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    # Oreo Cat by Aichan_owo - the waiting state while nothing is connected.
+    - assets/cat-sleep.gif
