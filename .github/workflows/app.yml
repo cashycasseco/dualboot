@@ -1,0 +1,74 @@
+name: Remote app (Android)
+
+# The APK is built here rather than on a workstation on purpose: Flutter plugins with Android
+# code cannot be compiled on the maintainer's machine (Gradle fails every plugin module with
+# "Cannot query the value of this provider"), and a clean runner sidesteps that entirely.
+# It also means the published APK is reproducible instead of "whatever that laptop produced".
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - ".github/workflows/app.yml"
+  pull_request:
+    paths:
+      - "app/**"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: app
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        # The goldens are rendered against whatever fonts the machine has, so they are a local
+        # review aid, not a CI gate. Everything else — the Bruce packet decoder, the card
+        # listing parser, the bundled cat — is real and runs here.
+        run: flutter test test/widget_test.dart test/render_test.dart
+
+      - name: Build APKs
+        run: flutter build apk --release --split-per-abi
+
+      - name: Name the artifacts
+        run: |
+          mkdir -p out
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk   out/TEmbedRemote-arm64.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk out/TEmbedRemote-arm32.apk
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tembed-remote-apk
+          path: app/out/*.apk
+          if-no-files-found: error
+
+      # Publishing a GitHub release attaches the APKs to it, so the download on the release
+      # page is always the one CI actually built.
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" out/*.apk --clobber
