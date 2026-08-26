@@ -4,6 +4,7 @@
 #include "sdcard.h"
 #include "settings.h"
 #include "usbdrive.h" // USBSerial
+#include "webportal.h"
 #include <SD.h>
 #include <esp_ota_ops.h>
 #include <esp_system.h>
@@ -119,6 +120,37 @@ static void handleLine(String cmd) {
                 USBSerial.printf("named slot %d = %s\n", slot, nm.c_str());
             } else USBSerial.println("ERR slot out of range");
         } else USBSerial.println("ERR usage: name <1|2|3> <text>");
+    } else if (cmd == "wifi" || cmd.startsWith("wifi ")) {
+        // wifi <ssid> [password]  — the network the launcher should join from now on.
+        // Quote anything containing spaces: wifi "My Net" "my pass"
+        String rest = cmd.length() > 4 ? cmd.substring(5) : String("");
+        rest.trim();
+        if (rest.isEmpty()) {
+            const String cur = webPortalNetworkName();
+            USBSerial.println(cur.length() ? "wifi: " + cur : "wifi: none saved");
+        } else {
+            String ssid, pass;
+            if (rest.startsWith("\"")) {
+                const int end = rest.indexOf('"', 1);
+                if (end > 0) {
+                    ssid = rest.substring(1, end);
+                    pass = rest.substring(end + 1);
+                }
+            } else {
+                const int sp = rest.indexOf(' ');
+                ssid = sp > 0 ? rest.substring(0, sp) : rest;
+                pass = sp > 0 ? rest.substring(sp + 1) : String("");
+            }
+            pass.trim();
+            if (pass.startsWith("\"") && pass.endsWith("\"") && pass.length() > 1)
+                pass = pass.substring(1, pass.length() - 1);
+            if (ssid.isEmpty()) {
+                USBSerial.println("ERR usage: wifi <ssid> [password]");
+            } else {
+                webPortalSetCredentials(ssid, pass, true);
+                USBSerial.println("saved: " + ssid + " (will be joined at boot)");
+            }
+        }
     } else if (cmd == "download") {
         USBSerial.println("entering ROM download mode...");
         USBSerial.flush();
@@ -142,7 +174,7 @@ static void handleLine(String cmd) {
         usbDrivePresent(false);
         USBSerial.println("usb: media absent");
     } else if (cmd == "help") {
-        USBSerial.println("commands: flash <slot> <size> | name <1-3> <text> | info | sd | themes | bat | usbon | usboff | download | help");
+        USBSerial.println("commands: flash <slot> <size> | name <1-3> <text> | wifi <ssid> [pass] | info | sd | themes | bat | usbon | usboff | download | help");
     } else if (cmd == "info") {
         // Every slot, not just the filled ones: "installed" comes from the image magic byte at
         // the start of the partition, so this shows exactly what the menu decides from.

@@ -90,6 +90,31 @@ static void slotIconsMenu() {
     }
 }
 
+// Check a slot before handing control to it. An install that died halfway leaves an image
+// that still looks bootable from the outside; the recorded checksum is the only thing that
+// knows better. Returns false when the user should stay in the menu.
+static bool bootSlot(const AppSlot &slot) {
+    if (appSlotHasChecksum(slot.part)) {
+        uiMessage("Checking " + appSlotDisplay(slot) + " ...", COL_MUTED);
+        String err;
+        if (!appSlotHealthy(slot.part, &err)) {
+            uiBackground();
+            uiTitleBar("SLOT DAMAGED");
+            uiTextCenter(appSlotDisplay(slot), 40, 2, COL_ERR);
+            uiTextCenter(err, 68, 1, COL_MUTED);
+            uiTextCenter("Install it again from the SD card.", 88, 1, COL_MUTED);
+            uiTextCenter("press = back", scrH() - 12, 1, gAccent);
+            uiFlush();
+            inputDrain();
+            while (inputPoll() == EV_NONE) delay(30);
+            return false;
+        }
+    }
+    uiMessage(String("Starting ") + slot.name, COL_OK);
+    appBoot(slot.part); // sets the slot + reboots; does not return
+    return true;
+}
+
 // Pick any .bin from the SD card and write it into a chosen slot (so the launcher is not
 // tied to Bruce/Flipper — anything in the card root shows up here).
 static void installFromSdMenu() {
@@ -280,8 +305,7 @@ static void mainMenu() {
 
         if (sel < nSlots) {
             if (slots[sel].installed) {
-                uiMessage(String("Starting ") + slots[sel].name, COL_OK);
-                appBoot(slots[sel].part); // sets the slot + reboots; does not return
+                if (!bootSlot(slots[sel])) continue;
             } else {
                 installFromSdMenu();
             }

@@ -2,6 +2,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tembed_remote/src/link/device_link.dart';
+import 'package:tembed_remote/src/macros.dart';
 import 'package:tembed_remote/src/protocol/file_list.dart';
 import 'package:tembed_remote/src/protocol/screen_ops.dart';
 
@@ -87,5 +89,45 @@ void main() {
     test('root has no parent', () {
       expect(parseListing('pa:/:0\n', '/').parent, isNull);
     });
+  });
+
+  // A macro recorded against Bruce can hold keys the launcher does not have. It has to come
+  // back usable rather than being thrown away wholesale.
+  group('macros', () {
+    test('survive a round trip through storage', () {
+      const m = Macro('WiFi menu', [RemoteKey.next, RemoteKey.next, RemoteKey.sel]);
+      final back = Macro.fromJson(m.toJson())!;
+      expect(back.name, 'WiFi menu');
+      expect(back.steps, [RemoteKey.next, RemoteKey.next, RemoteKey.sel]);
+    });
+
+    test('drop steps the firmware does not know, keep the rest', () {
+      final back = Macro.fromJson({
+        'name': 'from Bruce',
+        'steps': ['up', 'nonsense', 'sel'],
+      })!;
+      expect(back.steps, [RemoteKey.up, RemoteKey.sel]);
+    });
+
+    test('reject junk instead of half-building something', () {
+      expect(Macro.fromJson({'name': 'x', 'steps': <String>[]}), isNull);
+      expect(Macro.fromJson({'steps': ['sel']}), isNull);
+      expect(Macro.fromJson('nope'), isNull);
+    });
+
+    test('summarise short and long sequences differently', () {
+      expect(const Macro('a', [RemoteKey.prev, RemoteKey.sel]).summary, '◀ OK');
+      expect(
+        Macro('b', List.filled(9, RemoteKey.next)).summary,
+        endsWith('9 steps'),
+      );
+    });
+  });
+
+  // The slot list drives the boot buttons; a malformed entry must not take the list with it.
+  test('slot list skips entries without an index', () {
+    expect(AppSlotInfo.fromJson({'n': 2, 'name': 'Bruce', 'installed': true})?.name, 'Bruce');
+    expect(AppSlotInfo.fromJson({'n': 3})?.name, 'Slot 3');
+    expect(AppSlotInfo.fromJson({'name': 'no index'}), isNull);
   });
 }

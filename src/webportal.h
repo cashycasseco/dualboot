@@ -16,3 +16,8 @@ void webPortalStop();      // tear down server + radio
 // from setup(), AFTER the PIN — otherwise the remote could be used to answer the PIN screen.
 void webPortalAutoStart();
 bool webPortalAutoEnabled();
+
+// Save the network to join, without going through the hotspot and the portal page.
+// Used by the serial console and by a /wifi.txt dropped on the card.
+void webPortalSetCredentials(const String &ssid, const String &pass, bool autoStart);
+String webPortalNetworkName();

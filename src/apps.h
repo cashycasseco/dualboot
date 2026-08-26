@@ -45,5 +45,19 @@ void appSetIcon(const char *label, int icon);
 // The icons offered in the picker, in display order.
 const int *appIconChoices(int &count);
 
+// Integrity of an installed slot.
+//
+// A slot is erased before it is written, so an install that dies halfway leaves a partition
+// that still starts with a valid-looking image header — it boots, and then does whatever a
+// truncated firmware does. The installer records a checksum over exactly the bytes it wrote;
+// this re-reads the slot and compares. Costs a few hundred ms for a 4 MB image.
+//
+// Returns false only when a recorded checksum exists and does not match. Slots installed by
+// an older launcher have none, and are reported healthy rather than blocked.
+bool appSlotHealthy(const esp_partition_t *part, String *err = nullptr);
+
+// True if this slot has a checksum on file at all.
+bool appSlotHasChecksum(const esp_partition_t *part);
+
 // Erase a slot's app image and forget its stored name (uninstall).
 bool appDelete(const esp_partition_t *part);

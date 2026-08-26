@@ -14,6 +14,7 @@ import 'package:flutter/foundation.dart';
 
 import 'link/device_link.dart';
 import 'link/discovery.dart';
+import 'macros.dart';
 
 enum LinkState {
   /// Nothing running, auto mode off.
@@ -61,6 +62,21 @@ class RemoteSession extends ChangeNotifier {
 
   /// Set by the UI so a flipped auto switch survives a restart.
   Future<void> Function(bool auto)? onAutoChanged;
+
+  /// Set by the UI so recorded macros survive a restart.
+  Future<void> Function(List<Macro> macros)? onMacrosChanged;
+
+  final List<Macro> macros = [];
+
+  /// Keys captured since recording started, or null when not recording.
+  List<RemoteKey>? _recording;
+
+  /// The macro currently playing, and how far along it is.
+  Macro? playing;
+  int playedSteps = 0;
+
+  bool get isRecording => _recording != null;
+  int get recordedSteps => _recording?.length ?? 0;
 
   DeviceLink? get link => _link;
   String get firmware => _link?.title ?? '-';
@@ -219,6 +235,20 @@ class RemoteSession extends ChangeNotifier {
 
   // ---- streaming ------------------------------------------------------------------------
 
+  /// Reboot into an install slot. The link drops with it; the hunt loop brings it back as
+  /// whatever firmware comes up, which is exactly the behaviour we want here.
+  Future<void> bootSlot(int n) async {
+    final l = _link;
+    if (l == null || !l.supportsSlots) return;
+    try {
+      await l.bootSlot(n);
+    } catch (_) {
+      // The reply often never arrives because the device is already restarting.
+    }
+    _misses = 3;
+    unawaited(_hunt(afterLive: true));
+  }
+
   void setScale(int s) {
     final l = _link;
     if (l is LauncherLink) {
@@ -227,9 +257,59 @@ class RemoteSession extends ChangeNotifier {
     }
   }
 
-  Future<void> press(RemoteKey key) async {
+  // ---- macros ---------------------------------------------------------------------------
+
+  void startRecording() {
+    _recording = [];
+    notifyListeners();
+  }
+
+  /// Ends recording. Returns the captured keys, or null if nothing was pressed.
+  List<RemoteKey>? stopRecording() {
+    final steps = _recording;
+    _recording = null;
+    notifyListeners();
+    return (steps == null || steps.isEmpty) ? null : steps;
+  }
+
+  void addMacro(Macro m) {
+    macros.add(m);
+    onMacrosChanged?.call(macros);
+    notifyListeners();
+  }
+
+  void removeMacro(Macro m) {
+    macros.remove(m);
+    onMacrosChanged?.call(macros);
+    notifyListeners();
+  }
+
+  /// Replays a macro. The gap between steps is what the device needs to redraw between
+  /// presses — fire them back to back and it drops half of them.
+  Future<void> runMacro(Macro m) async {
+    if (playing != null || !isLive) return;
+    playing = m;
+    playedSteps = 0;
+    notifyListeners();
+    try {
+      for (final key in m.steps) {
+        if (!isLive) break;
+        await press(key, record: false);
+        playedSteps++;
+        notifyListeners();
+        await Future<void>.delayed(const Duration(milliseconds: 260));
+      }
+    } finally {
+      playing = null;
+      playedSteps = 0;
+      notifyListeners();
+    }
+  }
+
+  Future<void> press(RemoteKey key, {bool record = true}) async {
     final l = _link;
     if (l == null || !isLive) return;
+    if (record) _recording?.add(key);
     try {
       await l.send(key);
       _schedule(const Duration(milliseconds: 40)); // feel connected to the screen

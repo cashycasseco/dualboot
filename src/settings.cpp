@@ -7,6 +7,7 @@
 #include "sdcard.h"
 #include "serial_console.h"
 #include "webportal.h"
+#include "apps.h"
 #include <Preferences.h>
 #include <SD.h>
 #include <algorithm>
@@ -67,6 +68,69 @@ static void applyTheme() {
     rgbStripFill(sLedR * briPct / 100, sLedG * briPct / 100, sLedB * briPct / 100);
 }
 
+// Flashing the single-file launcher.bin writes 0xFF across NVS, so the accent colour, the
+// LED settings, the theme and every slot name and icon are gone. Nothing warns you. Keeping a
+// copy on the card turns that from "set it all up again" into "it just came back".
+#define SETTINGS_BACKUP THEMES_DIR "/settings.txt"
+
+static void backupToSd() {
+    if (!sdInit()) return;
+    if (!SD.exists(THEMES_DIR)) SD.mkdir(THEMES_DIR);
+    File f = SD.open(SETTINGS_BACKUP, FILE_WRITE);
+    if (!f) return;
+
+    f.println("# T-Embed launcher settings.");
+    f.println("# Written automatically. Restored on its own when the device's own storage is");
+    f.println("# empty - after a full-image flash, for instance. Delete it to start fresh.");
+    f.printf("accent = %04X\n", sAccent);
+    f.printf("led = %02X%02X%02X\n", sLedR, sLedG, sLedB);
+    f.printf("ledon = %d\n", sLedOn ? 1 : 0);
+    f.printf("brightness = %d\n", briPct);
+    f.printf("bootanim = %d\n", bootAnimOn ? 1 : 0);
+    f.println("theme = " + sThemeDir);
+    for (const AppSlot &s : appAllSlots()) {
+        const String stored = appStoredName(s.part->label);
+        if (stored.length()) f.printf("%s.name = %s\n", s.part->label, stored.c_str());
+        f.printf("%s.icon = %d\n", s.part->label, appSlotIcon(s.part->label));
+    }
+    f.close();
+}
+
+static bool restoreFromSd() {
+    if (!sdInit() || !SD.exists(SETTINGS_BACKUP)) return false;
+    File f = SD.open(SETTINGS_BACKUP, FILE_READ);
+    if (!f) return false;
+
+    bool any = false;
+    while (f.available()) {
+        String line = f.readStringUntil('\n');
+        line.trim();
+        if (line.isEmpty() || line.startsWith("#")) continue;
+        const int eq = line.indexOf('=');
+        if (eq <= 0) continue;
+        String key = line.substring(0, eq), val = line.substring(eq + 1);
+        key.trim();
+        val.trim();
+        if (val.isEmpty()) continue;
+        any = true;
+
+        if (key == "accent") sAccent = (uint16_t)strtoul(val.c_str(), nullptr, 16);
+        else if (key == "led") {
+            const uint32_t rgb = strtoul(val.c_str(), nullptr, 16);
+            sLedR = (rgb >> 16) & 0xFF;
+            sLedG = (rgb >> 8) & 0xFF;
+            sLedB = rgb & 0xFF;
+        } else if (key == "ledon") sLedOn = val.toInt() != 0;
+        else if (key == "brightness") briPct = constrain((int)val.toInt(), 0, 100);
+        else if (key == "bootanim") bootAnimOn = val.toInt() != 0;
+        else if (key == "theme") sThemeDir = val;
+        else if (key.endsWith(".name")) appSetName(key.substring(0, key.length() - 5).c_str(), val);
+        else if (key.endsWith(".icon")) appSetIcon(key.substring(0, key.length() - 5).c_str(), val.toInt());
+    }
+    f.close();
+    return any;
+}
+
 static void save() {
     Preferences p;
     p.begin("dbl", false);
@@ -79,11 +143,13 @@ static void save() {
     p.putBool("banim", bootAnimOn);
     p.putString("thdir", sThemeDir);
     p.end();
+    backupToSd();
 }
 
 void settingsLoad() {
     Preferences p;
     p.begin("dbl", true);
+    const bool blank = !p.isKey("acc"); // never written, or wiped by a full-image flash
     sAccent = p.getUShort("acc", 0x2FEB);
     sLedR = p.getUChar("lr", 0);
     sLedG = p.getUChar("lg", 220);
@@ -93,6 +159,10 @@ void settingsLoad() {
     bootAnimOn = p.getBool("banim", true);
     sThemeDir = p.getString("thdir", "");
     p.end();
+
+    // Nothing of our own on the device: take whatever the card remembers and write it back,
+    // so the next boot needs the card no more than any other.
+    if (blank && restoreFromSd()) save();
     // A theme pack may also carry its own icon set; load it before the first screen is drawn.
     // A saved path that no longer exists (card swapped, pack deleted, or the folder renamed from
     // the old /themes) is simply forgotten — the colours stay, the icons fall back to built-in.

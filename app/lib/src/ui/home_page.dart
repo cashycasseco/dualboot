@@ -13,8 +13,11 @@ import '../link/discovery.dart';
 import '../protocol/screen_painter.dart';
 import '../session.dart';
 import '../store.dart';
+import '../macros.dart';
+import 'control_cards.dart';
 import 'design.dart';
 import 'files_card.dart';
+import 'fullscreen_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.session});
@@ -58,7 +61,11 @@ class _HomePageState extends State<HomePage> {
       ..host = store.host
       ..user = store.user
       ..password = store.password
-      ..onAutoChanged = store.saveAuto;
+      ..onAutoChanged = store.saveAuto
+      ..onMacrosChanged = (list) => store.saveMacros([for (final m in list) m.toJson()]);
+    s.macros
+      ..clear()
+      ..addAll(store.macros.map(Macro.fromJson).whereType<Macro>());
     // Auto mode is sticky: if it was on when the app was last closed, start hunting now.
     if (store.auto) s.setAuto(true);
   }
@@ -190,9 +197,19 @@ class _HomePageState extends State<HomePage> {
                 // ---- the screen ------------------------------------------------------
                 DarkCard(
                   padding: const EdgeInsets.all(12),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(D.rInner),
-                    child: _Tube(session: s),
+                  child: GestureDetector(
+                    // Tap the picture for the sideways, full-screen version.
+                    onTap: live
+                        ? () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => FullscreenMirror(session: s),
+                            ),
+                          )
+                        : null,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(D.rInner),
+                      child: _Tube(session: s),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -234,6 +251,10 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                 ),
+
+                // ---- shortcuts and slots ----------------------------------------------
+                if (live) MacrosCard(session: s),
+                if (live && (s.link?.supportsSlots ?? false)) SlotsCard(session: s),
 
                 // ---- the card's files -------------------------------------------------
                 if (live && s.link!.supportsFiles)

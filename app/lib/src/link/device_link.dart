@@ -7,6 +7,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -131,7 +132,33 @@ abstract class DeviceLink {
     }
   }
 
+  // ---- slots ---------------------------------------------------------------------------
+  // Only the launcher owns the slots; Bruce is one of the things sitting in them.
+
+  bool get supportsSlots => false;
+
+  Future<List<AppSlotInfo>> slots() async => const [];
+
+  /// Reboots the device into that slot. The link dies with it — that is expected.
+  Future<void> bootSlot(int n) async {}
+
   void close() => client.close();
+}
+
+/// One of the launcher's install slots.
+class AppSlotInfo {
+  const AppSlotInfo(this.index, this.name, this.installed);
+
+  final int index;
+  final String name;
+  final bool installed;
+
+  static AppSlotInfo? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final n = raw['n'];
+    if (n is! int) return null;
+    return AppSlotInfo(n, raw['name'] as String? ?? 'Slot $n', raw['installed'] == true);
+  }
 }
 
 // ---------------------------------------------------------------------------------------
@@ -288,6 +315,28 @@ class LauncherLink extends DeviceLink {
 
     final image = await _decodeRgb565(body, w, h);
     return ScreenFrame.bitmap(image, body.length);
+  }
+
+  @override
+  bool get supportsSlots => true;
+
+  @override
+  Future<List<AppSlotInfo>> slots() async {
+    final res = await client.get(uri('/slots')).timeout(const Duration(seconds: 5));
+    if (res.statusCode != 200) throw LinkException('slots returned ${res.statusCode}');
+    final raw = jsonDecode(res.body);
+    if (raw is! List) throw LinkException('Unexpected slot list');
+    return raw.map(AppSlotInfo.fromJson).whereType<AppSlotInfo>().toList();
+  }
+
+  @override
+  Future<void> bootSlot(int n) async {
+    final res = await client
+        .get(uri('/boot', {'slot': '$n'}))
+        .timeout(const Duration(seconds: 6));
+    if (res.statusCode != 200) {
+      throw LinkException(res.body.isEmpty ? 'Could not boot slot $n' : res.body.trim());
+    }
   }
 
   @override

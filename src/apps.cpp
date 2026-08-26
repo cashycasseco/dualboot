@@ -1,6 +1,9 @@
 #include "apps.h"
 #include "display.h" // IC_* icon ids
 #include <Preferences.h>
+#include <esp_rom_crc.h>
+
+static void appSetChecksum(const char *label, uint32_t crc, uint32_t len);
 #include <SD.h>
 #include <algorithm>
 #include <esp_app_format.h> // ESP_IMAGE_HEADER_MAGIC
@@ -16,6 +19,14 @@ String appStoredName(const char *label) {
     p.end();
     return n;
 }
+static void appSetChecksum(const char *label, uint32_t crc, uint32_t len) {
+    Preferences p;
+    p.begin(kNameNs, false);
+    p.putUInt((String("ck_") + label).c_str(), crc);
+    p.putUInt((String("ln_") + label).c_str(), len);
+    p.end();
+}
+
 void appSetName(const char *label, const String &name) {
     Preferences p;
     p.begin(kNameNs, false);
@@ -26,7 +37,9 @@ void appClearName(const char *label) {
     Preferences p;
     p.begin(kNameNs, false);
     p.remove(label);
-    p.remove((String("i") + label).c_str()); // its icon choice goes with it
+    p.remove((String("i") + label).c_str());   // its icon choice goes with it
+    p.remove((String("ck_") + label).c_str()); // and the checksum, so a reinstall starts clean
+    p.remove((String("ln_") + label).c_str());
     p.end();
 }
 
@@ -211,6 +224,7 @@ bool appInstallFromSd(const char *path, const esp_partition_t *slot, const Strin
     static uint8_t buf[4096];
     size_t done = 0;
     bool ok = true;
+    uint32_t crc = 0;
     while (done < appSize) {
         const size_t want = min(sizeof(buf), appSize - done);
         const int n = f.read(buf, want);
@@ -222,6 +236,7 @@ bool appInstallFromSd(const char *path, const esp_partition_t *slot, const Strin
             ok = false;
             break;
         }
+        crc = esp_rom_crc32_le(crc, buf, n);
         done += n;
         if (cb) cb(done, appSize);
         yield();
@@ -241,5 +256,54 @@ bool appInstallFromSd(const char *path, const esp_partition_t *slot, const Strin
         return fail("Image rejected (corrupt?)");
     }
     appSetName(slot->label, name);
+    appSetChecksum(slot->label, crc, appSize);
+    return true;
+}
+
+// ---- slot integrity --------------------------------------------------------------------
+
+bool appSlotHasChecksum(const esp_partition_t *part) {
+    if (!part) return false;
+    Preferences p;
+    p.begin(kNameNs, true);
+    const bool has = p.isKey((String("ln_") + part->label).c_str());
+    p.end();
+    return has;
+}
+
+bool appSlotHealthy(const esp_partition_t *part, String *err) {
+    if (!part) return false;
+    Preferences p;
+    p.begin(kNameNs, true);
+    const String kc = String("ck_") + part->label, kl = String("ln_") + part->label;
+    const bool has = p.isKey(kl.c_str());
+    const uint32_t want = p.getUInt(kc.c_str(), 0);
+    const uint32_t len = p.getUInt(kl.c_str(), 0);
+    p.end();
+
+    // Nothing recorded (installed by an older launcher, or flashed directly) — do not stand
+    // in the user's way over something we never measured.
+    if (!has || len == 0) return true;
+    if (len > part->size) {
+        if (err) *err = "Recorded size does not fit the slot";
+        return false;
+    }
+
+    static uint8_t buf[4096];
+    uint32_t crc = 0, done = 0;
+    while (done < len) {
+        const uint32_t want_n = min((uint32_t)sizeof(buf), len - done);
+        if (esp_partition_read(part, done, buf, want_n) != ESP_OK) {
+            if (err) *err = "Could not read the slot";
+            return false;
+        }
+        crc = esp_rom_crc32_le(crc, buf, want_n);
+        done += want_n;
+        yield();
+    }
+    if (crc != want) {
+        if (err) *err = "Checksum does not match - the image is damaged";
+        return false;
+    }
     return true;
 }

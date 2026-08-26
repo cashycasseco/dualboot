@@ -35,6 +35,8 @@ class Store {
   String get password => _data['pass'] as String? ?? 'bruce';
   bool get auto => _data['auto'] as bool? ?? false;
 
+  List<dynamic> get macros => _data['macros'] as List<dynamic>? ?? const [];
+
   Future<void> saveDevice({
     required String host,
     required String user,
@@ -42,6 +44,8 @@ class Store {
   }) => _write({'host': host, 'user': user, 'pass': password});
 
   Future<void> saveAuto(bool auto) => _write({'auto': auto});
+
+  Future<void> saveMacros(List<Map<String, dynamic>> macros) => _write({'macros': macros});
 
   Future<void> _write(Map<String, dynamic> values) async {
     _data.addAll(values);
