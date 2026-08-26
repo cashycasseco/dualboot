@@ -133,9 +133,20 @@ ol.steps li::before{content:counter(s);position:absolute;left:0;top:-1px;
 #log{display:none;margin-top:14px;background:#0B0B0B;border-radius:var(--r-inner);
   padding:14px 16px;font-family:var(--mono);font-size:12.5px;line-height:1.55;
   color:var(--snow-soft);white-space:pre-wrap;max-height:260px;overflow:auto}
-.chk{display:flex;align-items:center;gap:10px;margin-top:18px;font-size:14px;
-  color:var(--ink-soft);cursor:pointer}
-.chk input{width:18px;height:18px;accent-color:var(--ink)}
+/* Erasing the chip throws away every installed firmware. Hiding that would be worse than
+   showing it: it gets its own row, and says out loud what it costs. */
+.danger{display:flex;gap:14px;align-items:flex-start;margin-top:20px;padding:16px 18px;
+  border-radius:var(--r-inner);background:var(--cream-deep);
+  border:2px solid transparent;cursor:pointer;transition:background .12s,border-color .12s}
+.danger:hover{border-color:#D6D0C4}
+.danger input{width:22px;height:22px;margin:1px 0 0;accent-color:var(--warn);
+  flex:0 0 auto;cursor:pointer}
+.danger b{display:block;font-size:14.5px;font-weight:600;color:var(--ink)}
+.danger em{display:block;font-style:normal;font-size:13.5px;color:var(--ink-soft);
+  margin-top:3px}
+.danger.on{background:#F3DED5;border-color:var(--warn)}
+.danger.on b{color:#8E3F1E}
+.danger.on em{color:#A2604A}
 .meta{margin-top:12px;font-family:var(--mono);font-size:12px;color:var(--ink-soft)}
 
 /* ---------- troubleshooting ---------- */
@@ -227,8 +238,15 @@ footer a{color:var(--snow-soft)}
         <span slot="not-allowed" class="tiny">Needs HTTPS</span>
       </esp-web-install-button>
 
-      <label class="chk"><input type="checkbox" id="eraseFirst"> Erase the whole chip first
-        <span class="tiny">— clean install, wipes installed firmware</span></label>
+      <label class="danger" id="eraseRow">
+        <input type="checkbox" id="eraseFirst">
+        <span>
+          <b>Erase the whole chip first</b>
+          <em id="eraseWhat">Only for a clean start. Wipes every installed firmware, your PIN,
+            theme, slot names and icons — everything except the launcher you are about to
+            write.</em>
+        </span>
+      </label>
       <div class="meta" id="buildinfo">reading…</div>
 
       <div class="note">
@@ -456,9 +474,19 @@ footer a{color:var(--snow-soft)}
 <script>
 // clean-install toggle drives every install button on the page
 const eraseBox = document.getElementById('eraseFirst');
+const eraseRow = document.getElementById('eraseRow');
+// Remember what each button said, so it can go back when the box is unticked.
+const installButtons = [...document.querySelectorAll('esp-web-install-button button')];
+installButtons.forEach(b => b.dataset.plain = b.textContent);
+
 eraseBox.addEventListener('change', () => {
+  const on = eraseBox.checked;
   document.querySelectorAll('esp-web-install-button').forEach(b =>
-    eraseBox.checked ? b.setAttribute('erase-first','') : b.removeAttribute('erase-first'));
+    on ? b.setAttribute('erase-first','') : b.removeAttribute('erase-first'));
+  eraseRow.classList.toggle('on', on);
+  // The button is the last thing anyone reads before clicking, so it should be the thing
+  // that names the consequence.
+  installButtons.forEach(b => b.textContent = on ? 'Erase and install' : b.dataset.plain);
 });
 
 // report what the flasher actually writes: three parts at their own offsets, so the
