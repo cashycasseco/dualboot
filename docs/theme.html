@@ -4,121 +4,145 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Dual-Boot Launcher — Theme Creator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#0a0d18; --card:#111629; --ink:#e9edf7; --muted:#8b98b8; --accent:#2fe38a;
-    --line:#1e2740; --faint:#5d6a8a;
-    --display:'Chakra Petch',system-ui,sans-serif;
-    --body:'Inter',system-ui,-apple-system,sans-serif;
-    --mono:ui-monospace,"Cascadia Mono",Consolas,monospace; }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--body);
-    font-size:15px; line-height:1.6; padding:0 16px 110px; -webkit-font-smoothing:antialiased;
-    background-image:radial-gradient(circle at 1px 1px,#161d33 1px,transparent 0);
-    background-size:22px 22px; }
-  .wrap { max-width:880px; margin:0 auto; }
-  .topbar { display:flex; align-items:center; gap:18px; height:58px; margin-bottom:26px;
-    border-bottom:1px solid var(--line); }
-  .brand { display:flex; align-items:center; gap:10px; font-family:var(--display);
-    font-weight:700; letter-spacing:.5px; font-size:15px; }
-  .marks { display:flex; gap:3px; }
-  .marks i { width:9px; height:18px; display:block; border-radius:1px; }
-  .marks i:nth-child(1){ background:var(--accent); }
-  .marks i:nth-child(2){ background:#00d5ff; height:12px; align-self:flex-end; }
-  .marks i:nth-child(3){ background:#33406b; height:9px; align-self:flex-end; }
-  .topbar .sp { flex:1; }
-  .topbar a { color:var(--muted); font-size:13.5px; text-decoration:none; font-weight:500; }
-  .topbar a:hover { color:var(--ink); }
-  h1 { font-family:var(--display); font-weight:700; font-size:30px; margin:0 0 10px;
-    letter-spacing:-.3px; }
-  h2 { font-family:var(--display); font-size:16px; letter-spacing:0; margin:0 0 4px; }
-  h2 .num { color:var(--accent); font-family:var(--mono); font-size:13px; margin-right:8px; }
-  .sub { color:var(--muted); font-size:14.5px; margin:0 0 26px; line-height:1.65; max-width:64ch; }
-  .sub a { color:var(--accent); }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
-    padding:20px 22px; margin-bottom:16px; }
-  .hint { color:var(--muted); font-size:13px; line-height:1.6; margin:6px 0 0; }
-  label { font-size:12px; color:var(--muted); display:block; margin-bottom:4px;
-    font-family:var(--mono); letter-spacing:.3px; }
-  input[type=text], select { background:#0e1122; color:var(--ink); border:1px solid var(--line);
-    border-radius:8px; padding:8px 10px; font:inherit; font-size:13px; width:100%; }
-  input[type=color] { width:100%; height:38px; background:#0e1122; border:1px solid var(--line);
-    border-radius:8px; padding:3px; cursor:pointer; }
-  input[type=range] { width:100%; accent-color:var(--accent); }
-  .row { display:flex; gap:14px; flex-wrap:wrap; }
-  .row > div { flex:1 1 150px; min-width:140px; }
-  button { background:var(--accent); color:#04140c; border:0; border-radius:8px;
-    font-family:var(--display); font-weight:700; font-size:14px; padding:11px 20px;
-    cursor:pointer; letter-spacing:.3px; }
-  button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line);
-    font-family:var(--body); font-weight:600; font-size:13px; }
-  button.ghost:hover { border-color:var(--accent); color:var(--accent); }
-  button:disabled { opacity:.45; cursor:not-allowed; }
-
-  /* preset palettes: something good-looking to start from instead of a blank picker */
-  .presets { display:flex; gap:9px; flex-wrap:wrap; margin-top:4px; }
-  .preset { display:flex; align-items:center; gap:7px; background:#0d1120; cursor:pointer;
-    border:1px solid var(--line); border-radius:20px; padding:6px 13px 6px 7px;
-    font-size:12.5px; color:var(--muted); font-family:var(--body); font-weight:500; }
-  .preset:hover { border-color:var(--accent); color:var(--ink); }
-  .preset .sw { width:15px; height:15px; border-radius:50%; display:block; flex:none; }
-
-  /* optional steps stay folded away so the default path is: colours -> preview -> download */
-  details.step { background:var(--card); border:1px solid var(--line); border-radius:12px;
-    margin-bottom:16px; }
-  details.step > summary { list-style:none; cursor:pointer; padding:18px 22px;
-    display:flex; align-items:center; gap:10px; }
-  details.step > summary::-webkit-details-marker { display:none; }
-  details.step > summary::after { content:"+"; margin-left:auto; color:var(--accent);
-    font-family:var(--mono); font-size:16px; }
-  details.step[open] > summary::after { content:"−"; }
-  details.step > summary h2 { margin:0; }
-  details.step .body { padding:0 22px 22px; }
-  .opt { font-family:var(--body); font-weight:500; font-size:12px; color:var(--faint);
-    border:1px solid var(--line); border-radius:20px; padding:2px 9px; }
-
-  /* the download stays reachable no matter how far you scroll */
-  .dock { position:fixed; left:0; right:0; bottom:0; z-index:30; background:rgba(10,13,24,.94);
-    backdrop-filter:blur(10px); border-top:1px solid var(--line); padding:12px 16px; }
-  .dock .inner { max-width:880px; margin:0 auto; display:flex; align-items:center; gap:14px;
-    flex-wrap:wrap; }
-  .dock .info { font-family:var(--mono); font-size:12px; color:var(--faint); flex:1; }
-  .icons { display:grid; grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); gap:10px; margin-top:12px; }
-  /* the two icon groups are labelled, so it's obvious which ones land on an app tile */
-  .group { margin-top:20px; padding-top:16px; border-top:1px solid var(--line); }
-  .ghead { font-family:var(--display); font-weight:700; font-size:14px; display:flex;
-    align-items:center; gap:10px; flex-wrap:wrap; }
-  .badge { font-family:var(--body); font-weight:600; font-size:11px; letter-spacing:.3px;
-    color:#04140c; background:var(--accent); border-radius:20px; padding:2px 10px; }
-  .gnote { color:var(--muted); font-size:12.5px; line-height:1.6; margin:5px 0 0; max-width:64ch; }
-  .icon { background:#0e1122; border:1px solid var(--line); border-radius:10px; padding:8px 6px;
-    text-align:center; cursor:pointer; transition:border-color .15s; }
-  .icon:hover { border-color:var(--accent); }
-  .icon canvas { display:block; margin:0 auto 6px; border-radius:8px; }
-  .icon .nm { font-size:10px; color:var(--muted); letter-spacing:.3px; word-break:break-all; }
-  .icon.custom { border-color:var(--accent); }
-  .icon.custom .nm { color:var(--accent); }
-  .preview { display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap; }
-  /* the 320px device preview must shrink on a phone instead of widening the page */
-  .preview canvas { border-radius:8px; border:1px solid var(--line); image-rendering:pixelated;
-    max-width:100%; height:auto; }
-  code, .hint, .gnote, p, li, .files { overflow-wrap:anywhere; }
-  @media(max-width:460px){
-    body { padding:0 12px 120px; }
-    h1 { font-size:23px; }
-    .card, details.step > summary, details.step .body { padding-left:16px; padding-right:16px; }
-    .dock .inner { gap:9px; }
-    .dock button { width:100%; }
+  :root{
+    --bg:#0F0F0F; --surface:#191919; --surface-hi:#232323;
+    --cream:#EFEAE1; --cream-deep:#E2DCD1;
+    --ink:#16150F; --ink-soft:#8B857C;
+    --snow:#F5F3EF; --snow-soft:#7E7C78; --snow-faint:#565452;
+    /* kept: the markup and a couple of inline styles in the script reference these */
+    --accent:#59A06B; --line:#232323; --muted:#8B857C; --faint:#565452;
+    --r-card:30px; --r-inner:22px;
+    --sans:'Instrument Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --serif:'Instrument Serif',Georgia,serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   }
-  .strip { display:flex; gap:3px; margin-top:8px; }
-  .strip i { width:14px; height:14px; border-radius:3px; display:block; }
-  .files { font-size:12px; color:var(--muted); margin-top:8px; }
-  .bar { height:8px; background:#0e1122; border-radius:4px; overflow:hidden; margin-top:8px; }
-  .bar i { display:block; height:100%; background:var(--accent); width:0; }
-  .warn { color:#ffb020; }
-  .ok { color:var(--accent); }
-  .steps { font-size:13px; line-height:1.8; padding-left:18px; margin:6px 0 0; }
-  code { background:#0e1122; padding:1px 5px; border-radius:4px; font-size:12px; }
-  .dl { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:4px; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--snow);font-family:var(--sans);
+    font-size:16px;line-height:1.6;padding:0 16px 120px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:880px;margin:0 auto}
+  a{color:var(--snow-soft);text-decoration:none}
+  a:hover{color:var(--snow)}
+
+  /* ---- header ---- */
+  .topbar{display:flex;align-items:center;gap:20px;height:64px;font-size:14px}
+  .brand{font-weight:600;letter-spacing:-.02em;color:var(--snow);display:flex;
+    align-items:center;gap:10px}
+  .marks{display:flex;gap:4px}
+  .marks i{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+  .marks i:nth-child(2){background:var(--snow-faint)}
+  .marks i:nth-child(3){background:var(--surface-hi)}
+  .topbar .sp{margin-left:auto}
+
+  /* ---- type ---- */
+  h1{font-size:clamp(30px,5vw,46px);font-weight:600;letter-spacing:-.02em;line-height:1.12;
+    margin:26px 0 10px}
+  h2{font-size:19px;font-weight:600;letter-spacing:-.02em;margin:0;display:flex;
+    align-items:center;gap:12px}
+  .num{font-family:var(--serif);font-style:italic;font-weight:400;font-size:17px;
+    color:var(--ink-soft)}
+  .sub{font-family:var(--serif);font-style:italic;font-size:19px;line-height:1.5;
+    color:var(--snow-soft);max-width:60ch;margin-bottom:30px}
+  label{display:block;font-size:11px;font-weight:500;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-soft);margin-bottom:7px}
+  .hint{font-size:14px;color:var(--ink-soft);margin:0}
+  .files{font-size:13px;color:var(--ink-soft)}
+  code{font-family:var(--mono);font-size:.85em;background:var(--cream-deep);
+    color:var(--ink);padding:2px 6px;border-radius:7px}
+
+  /* ---- cards ---- */
+  .card,.step{background:var(--cream);color:var(--ink);border-radius:var(--r-card);
+    padding:26px;margin-bottom:14px}
+  .card h2,.step h2{color:var(--ink)}
+  .step{padding:0}
+  .step > summary{list-style:none;cursor:pointer;padding:24px 26px;display:flex;
+    align-items:center;gap:12px}
+  .step > summary::-webkit-details-marker{display:none}
+  .step > summary::after{content:"+";margin-left:auto;color:var(--ink-soft);font-size:20px}
+  .step[open] > summary::after{content:"–"}
+  .step .body{padding:0 26px 26px}
+  .opt{font-family:var(--serif);font-style:italic;font-size:14px;color:var(--ink-soft)}
+
+  /* ---- controls ---- */
+  .row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+  .row > div{flex:1 1 150px}
+  input[type=text],select{width:100%;background:var(--cream-deep);border:0;
+    border-radius:14px;padding:13px 15px;color:var(--ink);font:500 15px/1.2 var(--sans)}
+  input[type=text]:focus,select:focus{outline:2px solid var(--ink);outline-offset:-2px}
+  input[type=color]{width:100%;height:46px;background:var(--cream-deep);border:0;
+    border-radius:14px;padding:5px;cursor:pointer}
+  input[type=range]{width:100%;accent-color:var(--ink);height:26px}
+  button{font:600 14px/1 var(--sans);letter-spacing:-.01em;border:0;border-radius:100px;
+    padding:13px 22px;cursor:pointer;background:var(--ink);color:var(--cream);
+    transition:transform .08s ease}
+  button:active{transform:scale(.98)}
+  button.ghost{background:var(--cream-deep);color:var(--ink)}
+  button:disabled{opacity:.45;cursor:default}
+  .dl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px}
+
+  /* ---- presets ---- */
+  /* the script builds <button class="preset"><span class="sw" style="background:…"> */
+  .presets{display:flex;gap:9px;flex-wrap:wrap}
+  .presets .preset{display:inline-flex;align-items:center;gap:9px;
+    background:var(--cream-deep);color:var(--ink);border:2px solid transparent;
+    border-radius:100px;padding:8px 16px 8px 9px;font-size:13.5px;font-weight:500}
+  .presets .preset:hover{border-color:#CFC8BA}
+  .presets .preset .sw{width:20px;height:20px;border-radius:50%;flex:0 0 auto;
+    display:block}
+
+  /* ---- preview ---- */
+  .preview{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+  .preview canvas{border-radius:14px;background:#000;image-rendering:pixelated;
+    flex:0 0 auto}
+  .strip{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .strip i{width:16px;height:16px;border-radius:50%;background:#D6D0C4;display:block}
+
+  /* ---- icon groups ---- */
+  .group{margin-top:20px}
+  .ghead{font-size:14px;font-weight:600;color:var(--ink);display:flex;align-items:center;
+    gap:10px;flex-wrap:wrap;margin-bottom:4px}
+  .badge{font-family:var(--serif);font-style:italic;font-weight:400;font-size:13px;
+    color:var(--ink-soft)}
+  .gnote{font-size:13.5px;color:var(--ink-soft);margin:0 0 12px;max-width:70ch}
+  .icons{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px}
+  .icons > div{background:var(--cream-deep);border-radius:16px;padding:10px 6px;
+    text-align:center;cursor:pointer}
+  .icons canvas{image-rendering:pixelated;border-radius:8px}
+  .icons span{display:block;font-size:10.5px;color:var(--ink-soft);margin-top:5px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* ---- progress ---- */
+  .bar{height:8px;border-radius:100px;background:var(--cream-deep);overflow:hidden;
+    margin-top:14px}
+  .bar i{display:block;height:100%;width:0;background:var(--ink);border-radius:100px;
+    transition:width .2s}
+
+  .steps{font-size:14.5px;line-height:1.8;padding-left:20px;margin:10px 0 0;
+    color:var(--ink-soft)}
+  .warn{color:#B4552F}
+  .ok{color:var(--accent)}
+
+  /* ---- dock ---- */
+  .dock{position:fixed;left:0;right:0;bottom:0;background:rgba(15,15,15,.9);
+    backdrop-filter:saturate(140%) blur(10px);border-top:1px solid var(--surface);
+    padding:14px 16px;z-index:50}
+  .dock .inner{max-width:880px;margin:0 auto;display:flex;align-items:center;gap:16px}
+  .dock .info{font-size:13px;color:var(--snow-soft);flex:1}
+  .dock button{background:var(--cream);color:var(--ink);padding:15px 26px;font-size:15px}
+
+  @media (max-width:600px){
+    .card,.step{padding:20px;border-radius:24px}
+    .step{padding:0}
+    .step > summary{padding:20px}
+    .step .body{padding:0 20px 20px}
+    .preview{gap:16px}
+    .dock .inner{gap:10px}
+    .dock button{padding:14px 18px;font-size:14px}
+    .dock .info{font-size:12px}
+  }
 </style>
 </head>
 <body>
@@ -237,7 +261,7 @@
 
   <div class="card">
     <h2><span class="num">05</span>Put it on the device</h2>
-    <p class="hint" style="margin-bottom:8px"><b style="color:var(--accent)">Easiest — over Wi-Fi:</b>
+    <p class="hint" style="margin-bottom:8px"><b style="color:var(--ink)">Easiest — over Wi-Fi:</b>
       on the device pick <b>WiFi</b> in the main menu, join the hotspot it shows, open
       <code>http://192.168.4.1</code> and upload this .zip. It's unpacked on the device for you.</p>
     <ol class="steps">
@@ -247,9 +271,8 @@
       <li>Then on the device: <b>Settings → Design → Theme</b> → pick your theme. Colours, icons and
         the boot animation all switch over instantly.</li>
     </ol>
-    <div id="pfilewarn" style="margin-top:16px;padding:13px 15px;border:1px solid #ffb020;
-         border-radius:10px;background:#1d1a12">
-      <b style="color:#ffb020">⚠ Windows users — if the theme doesn't show up on the device</b>
+    <div id="pfilewarn" style="margin-top:16px;padding:16px 18px;border-radius:22px;background:var(--cream-deep)">
+      <b style="color:#B4552F">Windows users — if the theme doesn't show up on the device</b>
       <p class="hint" style="margin-top:6px">
         Windows can silently <b>encrypt</b> files copied to removable drives, renaming them to
         <code>theme.txt.PFILE</code>, <code>icons.bin.PFILE</code> … and adding an <code>$EFS</code>
@@ -520,7 +543,7 @@ $("animFile").onchange = async e => {
       const { raw, canvas } = frameToRaw(srcs[i], W, H);
       animFrames.push(raw);
       if (i < 8) {
-        canvas.style.cssText = "width:88px;height:auto;border-radius:6px;border:1px solid var(--line);image-rendering:pixelated";
+        canvas.style.cssText = "width:88px;height:auto;border-radius:10px;border:0;image-rendering:pixelated";
         strip.appendChild(canvas);
       }
       $("animBar").style.width = ((i+1)/srcs.length*100) + "%";
@@ -575,7 +598,7 @@ function drawPreview() {
   $("strip").innerHTML = "";
   for (let i = 0; i < 8; i++) {
     const el = document.createElement("i");
-    el.style.background = on ? css(lit) : "#141a2c";
+    el.style.background = on ? css(lit) : "#D6D0C4";
     el.style.boxShadow = on ? `0 0 6px ${css(lit)}` : "none";
     $("strip").appendChild(el);
   }
